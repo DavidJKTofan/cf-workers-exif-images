@@ -3,53 +3,98 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width,initial-scale=1" />
-		<title>Image Protector — Frontend</title>
+		<title>Image Protector</title>
 		<style>
 			:root {
-				font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+				--bg: #f5f7fb;
+				--card: #ffffff;
+				--muted: #6b7280;
+				--accent: #0b66ff;
+				--glass: rgba(11, 102, 255, 0.06);
+				--radius: 12px;
+				font-family: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+				color: #0f172a;
 				font-size: 15px;
-				color: #111;
 			}
+			html,
 			body {
+				height: 100%;
 				margin: 0;
-				padding: 24px;
-				display: flex;
-				justify-content: center;
-				background: #f6f7fb;
+				background: linear-gradient(180deg, var(--bg), #eef2fb 60%);
+				-webkit-font-smoothing: antialiased;
 			}
-			main {
+			.page {
+				min-height: 100%;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				padding: 28px;
+				box-sizing: border-box;
+			}
+
+			.card {
 				width: 100%;
 				max-width: 980px;
-				background: #fff;
+				background: var(--card);
+				border-radius: var(--radius);
+				padding: 22px;
+				box-shadow: 0 8px 30px rgba(13, 24, 40, 0.07);
+				border: 1px solid rgba(15, 23, 42, 0.03);
+				box-sizing: border-box;
+			}
+
+			header {
+				display: flex;
+				gap: 16px;
+				align-items: center;
+				margin-bottom: 14px;
+			}
+			.logo {
+				width: 48px;
+				height: 48px;
 				border-radius: 10px;
-				padding: 20px 24px;
-				box-shadow: 0 8px 30px rgba(20, 20, 40, 0.06);
+				background: linear-gradient(135deg, var(--accent), #5fb0ff);
+				display: grid;
+				place-items: center;
+				color: white;
+				font-weight: 700;
+				box-shadow: 0 6px 18px rgba(11, 102, 255, 0.12);
 			}
 			h1 {
-				margin: 0 0 12px;
-				font-size: 20px;
+				font-size: 18px;
+				margin: 0;
 			}
-			.row {
-				display: flex;
-				gap: 12px;
-				align-items: center;
-			}
-			label {
-				font-weight: 600;
+			p.lead {
+				margin: 0;
+				color: var(--muted);
 				font-size: 13px;
-				margin-bottom: 6px;
-				display: block;
+			}
+
+			form {
+				margin-top: 14px;
 			}
 			fieldset {
-				border: 1px solid #e6e9ef;
-				padding: 12px;
-				border-radius: 8px;
+				border: 1px solid #7d8289;
+				border-radius: 10px;
+				padding: 14px;
 				margin-bottom: 12px;
 			}
-			.two-col {
+			legend {
+				font-size: 12px;
+				color: var(--muted);
+				padding: 0 6px;
+			}
+			.grid-2 {
 				display: grid;
 				grid-template-columns: 1fr 1fr;
 				gap: 12px;
+			}
+			label {
+				display: block;
+				font-weight: 600;
+				font-size: 13px;
+				margin-bottom: 8px;
+				color: #0f172a;
 			}
 			input[type='file'] {
 				display: block;
@@ -59,35 +104,71 @@
 			textarea,
 			select {
 				width: 100%;
-				padding: 8px;
-				border: 1px solid #d7dbe8;
-				border-radius: 6px;
+				padding: 10px;
+				border-radius: 8px;
+				border: 1px solid #e6eefb;
+				background: #fbfdff;
+				box-sizing: border-box;
+				font-size: 14px;
 			}
 			textarea {
+				min-height: 88px;
 				resize: vertical;
-				min-height: 80px;
 			}
-			button {
-				background: #0b66ff;
-				color: #fff;
-				border: 0;
+
+			.row {
+				display: flex;
+				gap: 8px;
+				align-items: center;
+			}
+			.controls {
+				display: flex;
+				gap: 12px;
+				align-items: center;
+			}
+			.btn {
+				display: inline-flex;
+				align-items: center;
+				gap: 8px;
 				padding: 10px 14px;
-				border-radius: 8px;
-				font-weight: 600;
+				border-radius: 10px;
+				border: 0;
+				font-weight: 700;
+				color: #fff;
+				background: var(--accent);
 				cursor: pointer;
+				box-shadow: 0 6px 18px rgba(11, 102, 255, 0.12);
 			}
-			button[disabled] {
+			.btn.ghost {
+				background: transparent;
+				color: var(--accent);
+				border: 1px solid rgba(11, 102, 255, 0.12);
+				font-weight: 600;
+			}
+			.btn[disabled] {
 				opacity: 0.5;
-				cursor: default;
+				cursor: not-allowed;
+				box-shadow: none;
 			}
+
 			.muted {
-				color: #6b6f76;
+				color: var(--muted);
 				font-size: 13px;
+			}
+			.small {
+				font-size: 13px;
+				color: var(--muted);
+			}
+
+			.meta-area {
+				display: grid;
+				grid-template-columns: 1fr 1fr;
+				gap: 12px;
 			}
 			.meta-rows {
 				display: flex;
 				flex-direction: column;
-				gap: 6px;
+				gap: 8px;
 			}
 			.meta-row {
 				display: flex;
@@ -95,15 +176,13 @@
 			}
 			.meta-row input {
 				flex: 1;
+				padding: 8px;
+				border-radius: 8px;
+				border: 1px solid #eef4ff;
+				background: #fff;
 			}
-			.meta-row button {
-				background: #efefef;
-				color: #333;
-				padding: 6px;
-				border-radius: 6px;
-				border: 1px solid #ddd;
-			}
-			#previewWrap {
+
+			.previewWrap {
 				display: flex;
 				gap: 12px;
 				flex-wrap: wrap;
@@ -112,158 +191,193 @@
 			.preview {
 				width: 120px;
 				height: 120px;
-				border-radius: 6px;
-				border: 1px solid #e6e9ef;
+				border-radius: 10px;
+				border: 1px solid #eef4ff;
+				background: linear-gradient(180deg, #fbfdff, #f7fbff);
 				display: flex;
 				align-items: center;
 				justify-content: center;
-				background: #fafbff;
 				overflow: hidden;
+				box-shadow: inset 0 -4px 18px rgba(11, 102, 255, 0.02);
 			}
-			.small {
-				font-size: 12px;
-				color: #666;
+			.preview img {
+				max-width: 100%;
+				max-height: 100%;
+				display: block;
 			}
+
 			#result {
 				margin-top: 12px;
-			}
-			.controls {
 				display: flex;
-				gap: 8px;
+				gap: 12px;
+				align-items: center;
+				flex-wrap: wrap;
+			}
+
+			footer {
+				margin-top: 14px;
+				display: flex;
+				justify-content: space-between;
+				gap: 12px;
 				align-items: center;
 			}
-			.input-inline {
-				display: flex;
-				gap: 8px;
-				align-items: center;
-			}
-			.opt {
-				display: flex;
-				gap: 8px;
-				align-items: center;
-				margin-top: 6px;
-			}
-			.help {
+			code.badge {
+				background: #f1f5f9;
+				padding: 6px 8px;
+				border-radius: 8px;
 				font-size: 12px;
-				color: #666;
-				margin-top: 6px;
+				color: var(--muted);
+				border: 1px solid #eef2ff;
+			}
+
+			/* responsive */
+			@media (max-width: 720px) {
+				.grid-2,
+				.meta-area {
+					grid-template-columns: 1fr;
+				}
+				header {
+					gap: 10px;
+				}
+				.logo {
+					width: 44px;
+					height: 44px;
+				}
 			}
 		</style>
 	</head>
 	<body>
-		<main>
-			<h1>Image Protector</h1>
-
-			<form id="uploadForm" autocomplete="off" novalidate>
-				<fieldset>
-					<legend class="muted">Main image</legend>
-					<div class="two-col">
-						<div>
-							<label>Main image (file)</label>
-							<input id="mainFile" name="main_file" type="file" accept="image/*" />
-							<div class="help">Supported: JPG/JPEG, PNG, WEBP, HEIC, SVG. You may also provide a public URL below.</div>
-						</div>
-						<div>
-							<label>Main image (public URL)</label>
-							<input id="mainUrl" name="main_url" type="url" placeholder="https://example.com/image.jpg" />
-						</div>
+		<div class="page">
+			<section class="card" aria-labelledby="title">
+				<header>
+					<div class="logo">IP</div>
+					<div>
+						<h1 id="title">Image Protector</h1>
+						<p class="lead">Embed EXIF metadata into JPEGs and optionally apply a resized watermark before publishing.</p>
 					</div>
-				</fieldset>
+				</header>
 
-				<fieldset>
-					<legend class="muted">Watermark (optional)</legend>
-					<div class="two-col">
-						<div>
-							<label>Watermark (file)</label>
-							<input id="wmFile" name="watermark_file" type="file" accept="image/*" />
-						</div>
-						<div>
-							<label>Watermark (public URL)</label>
-							<input id="wmUrl" name="watermark_url" type="url" placeholder="https://example.com/wm.png" />
-						</div>
-					</div>
-
-					<div class="opt">
-						<div style="min-width: 220px">
-							<label>Watermark size</label>
-							<select id="wmSize">
-								<option value="10p">10% width</option>
-								<option value="15p">15% width</option>
-								<option value="20p" selected>20% width</option>
-								<option value="30p">30% width</option>
-							</select>
-						</div>
-						<div style="min-width: 160px">
-							<label>Watermark opacity</label>
-							<select id="wmOpacity">
-								<option value="30">30%</option>
-								<option value="45">45%</option>
-								<option value="60" selected>60%</option>
-								<option value="80">80%</option>
-							</select>
-						</div>
-						<div style="min-width: 160px">
-							<label>Gravity</label>
-							<select id="wmGravity">
-								<option value="center" selected>Center</option>
-								<option value="northwest">Top-left</option>
-								<option value="northeast">Top-right</option>
-								<option value="southwest">Bottom-left</option>
-								<option value="southeast">Bottom-right</option>
-							</select>
-						</div>
-					</div>
-				</fieldset>
-
-				<fieldset>
-					<legend class="muted">Metadata to embed</legend>
-
-					<div style="display: flex; gap: 12px; align-items: flex-start">
-						<div style="flex: 1">
-							<label>Common fields</label>
-							<input id="metaAuthor" type="text" placeholder="Author / Creator" />
-							<div style="height: 8px"></div>
-							<input id="metaDesc" type="text" placeholder="Description / ImageDescription" />
-							<div style="height: 8px"></div>
-							<input id="metaSource" type="text" placeholder="Source / Website" />
-						</div>
-
-						<div style="flex: 1">
-							<label>Custom key/value pairs</label>
-							<div class="meta-rows" id="metaRows"></div>
-							<div style="margin-top: 8px">
-								<button type="button" id="addMeta">Add pair</button>
+				<form id="uploadForm" autocomplete="off" novalidate>
+					<fieldset>
+						<legend>Main image</legend>
+						<div class="grid-2">
+							<div>
+								<label for="mainFile">Main image — file (preferred)</label>
+								<input id="mainFile" name="main_file" type="file" accept="image/jpeg,image/jpg" />
+								<div class="small muted">
+									Only JPEG is allowed when embedding EXIF metadata. Otherwise watermarking works with other formats.
+								</div>
+							</div>
+							<div>
+								<label for="mainUrl">Main image — public URL</label>
+								<input id="mainUrl" name="main_url" type="url" placeholder="https://example.com/image.jpg" />
 							</div>
 						</div>
-					</div>
+					</fieldset>
 
-					<div style="margin-top: 10px">
-						<label>Raw metadata JSON (optional override)</label>
-						<textarea id="metadataJson" name="metadata_json" placeholder='{"Author":"Alice","Source":"example.com"}'></textarea>
-					</div>
-				</fieldset>
+					<fieldset>
+						<legend>Watermark (optional)</legend>
+						<div class="grid-2">
+							<div>
+								<label for="wmFile">Watermark — file</label>
+								<input id="wmFile" name="watermark_file" type="file" accept="image/*" />
+							</div>
+							<div>
+								<label for="wmUrl">Watermark — public URL</label>
+								<input id="wmUrl" name="watermark_url" type="url" placeholder="https://example.com/wm.png" />
+							</div>
+						</div>
 
-				<div class="row" style="justify-content: space-between; align-items: center">
-					<div class="muted small">
-						Uploads are sent to the worker at <code>/process</code>. The worker embeds EXIF / PNG text / SVG metadata and optionally applies
-						a watermark.
-					</div>
-					<div style="display: flex; gap: 8px; align-items: center">
-						<button id="submitBtn" type="submit">Protect & Download</button>
-					</div>
-				</div>
-			</form>
+						<div style="display: flex; gap: 12px; margin-top: 12px; align-items: flex-end; flex-wrap: wrap">
+							<div style="min-width: 170px">
+								<label for="wmSize">Watermark size</label>
+								<select id="wmSize">
+									<option value="10p">10%</option>
+									<option value="15p">15%</option>
+									<option value="20p" selected>20%</option>
+									<option value="30p">30%</option>
+								</select>
+							</div>
+							<div style="min-width: 140px">
+								<label for="wmOpacity">Opacity</label>
+								<select id="wmOpacity">
+									<option value="30">30%</option>
+									<option value="45">45%</option>
+									<option value="60" selected>60%</option>
+									<option value="80">80%</option>
+								</select>
+							</div>
+							<div style="min-width: 140px">
+								<label for="wmGravity">Gravity</label>
+								<select id="wmGravity">
+									<option value="center" selected>Center</option>
+									<option value="northwest">Top-left</option>
+									<option value="northeast">Top-right</option>
+									<option value="southwest">Bottom-left</option>
+									<option value="southeast">Bottom-right</option>
+								</select>
+							</div>
+						</div>
+					</fieldset>
 
-			<div id="result"></div>
+					<fieldset>
+						<legend>Metadata to embed (JPEG only)</legend>
+						<div class="meta-area">
+							<div>
+								<label>Common fields</label>
+								<input id="metaAuthor" type="text" placeholder="Author / Artist" />
+								<div style="height: 8px"></div>
+								<input id="metaDesc" type="text" placeholder="Description / ImageDescription" />
+								<div style="height: 8px"></div>
+								<input id="metaSource" type="text" placeholder="Source / Website" />
+							</div>
 
-			<section id="previewArea" style="margin-top: 16px">
-				<label>Previews</label>
-				<div id="previewWrap" aria-live="polite"></div>
+							<div>
+								<label>Custom key/value pairs</label>
+								<div class="meta-rows" id="metaRows"></div>
+								<div style="margin-top: 10px">
+									<button type="button" id="addMeta" class="btn ghost">+ Add pair</button>
+								</div>
+							</div>
+						</div>
+
+						<div style="margin-top: 12px">
+							<label for="metadataJson">Raw metadata JSON (optional — overrides fields)</label>
+							<textarea id="metadataJson" name="metadata_json" placeholder='{"Author":"Alice","Source":"example.com"}'></textarea>
+						</div>
+					</fieldset>
+
+					<div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap">
+						<div class="small muted">Uploads are POSTed to <code class="badge">/process</code>. EXIF only applies to JPEG outputs.</div>
+						<div class="controls">
+							<button id="submitBtn" class="btn" type="submit">
+								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+									<path
+										d="M12 2v20M5 9l7-7 7 7"
+										stroke="currentColor"
+										stroke-width="1.6"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									/></svg
+								>Protect & Download
+							</button>
+							<button id="clearBtn" type="button" class="btn ghost">Clear</button>
+						</div>
+					</div>
+				</form>
+				<div id="result"></div>
+				<section id="previewArea" style="margin-top: 16px">
+					<label class="small">Previews</label>
+					<div class="previewWrap" id="previewWrap" aria-live="polite"></div>
+				</section>
+				<footer style="margin-top: 14px">
+					<span class="small muted">Deterministic R2 keys. No third-party libraries.</span>
+					<span class="small muted">Watermark will be clamped to avoid covering the full image.</span>
+				</footer>
 			</section>
-		</main>
+		</div>
 
 		<script>
-			// Minimal, dependency-free frontend.
 			(function () {
 				const form = document.getElementById('uploadForm');
 				const mainFile = document.getElementById('mainFile');
@@ -282,6 +396,7 @@
 				const wmSize = document.getElementById('wmSize');
 				const wmOpacity = document.getElementById('wmOpacity');
 				const wmGravity = document.getElementById('wmGravity');
+				const clearBtn = document.getElementById('clearBtn');
 
 				function createMetaRow(key = '', value = '') {
 					const wrap = document.createElement('div');
@@ -296,7 +411,9 @@
 					v.value = value;
 					const rm = document.createElement('button');
 					rm.type = 'button';
-					rm.textContent = 'remove';
+					rm.textContent = '✕';
+					rm.title = 'Remove';
+					rm.style.padding = '6px 8px';
 					rm.addEventListener('click', () => wrap.remove());
 					wrap.appendChild(k);
 					wrap.appendChild(v);
@@ -305,96 +422,103 @@
 					return wrap;
 				}
 
-				addMeta.addEventListener('click', () => createMetaRow());
+				// wire the Add pair button (was missing)
+				if (addMeta) addMeta.addEventListener('click', () => createMetaRow());
 
-				// initial one
-				createMetaRow('Copyright', '');
+				// ensure at least one row exists
+				if (!metaRows.querySelector('.meta-row')) createMetaRow('Copyright', '');
 
 				function clearPreviews() {
 					previewWrap.innerHTML = '';
 				}
-
-				function addPreview(fileOrUrl, label) {
+				function addPreview(src, label) {
 					const box = document.createElement('div');
 					box.className = 'preview';
-					if (fileOrUrl instanceof File) {
+					if (src instanceof File) {
 						const reader = new FileReader();
 						reader.onload = () => {
-							if (fileOrUrl.type && fileOrUrl.type.startsWith('image')) {
+							if (src.type && src.type.startsWith('image')) {
 								const img = document.createElement('img');
-								img.style.maxWidth = '100%';
-								img.style.maxHeight = '100%';
 								img.src = reader.result;
 								box.appendChild(img);
 							} else {
 								box.textContent = 'file';
 							}
 						};
-						reader.readAsDataURL(fileOrUrl);
-					} else if (typeof fileOrUrl === 'string' && fileOrUrl.trim() !== '') {
+						reader.readAsDataURL(src);
+					} else if (typeof src === 'string' && src.trim() !== '') {
 						const img = document.createElement('img');
-						img.style.maxWidth = '100%';
-						img.style.maxHeight = '100%';
-						img.src = fileOrUrl;
-						img.onerror = () => {
-							box.textContent = 'preview failed';
-						};
+						img.src = src;
+						img.onerror = () => (box.textContent = 'preview failed');
 						box.appendChild(img);
-					} else {
-						box.textContent = label || '';
-					}
+					} else box.textContent = label || '';
 					previewWrap.appendChild(box);
 				}
-
 				function refreshPreviews() {
 					clearPreviews();
 					if (mainFile.files && mainFile.files[0]) addPreview(mainFile.files[0], 'main');
-					else if (mainUrl.value) addPreview(mainUrl.value, 'main-url');
-
+					else if (mainUrl.value) addPreview(mainUrl.value, 'main');
 					if (wmFile.files && wmFile.files[0]) addPreview(wmFile.files[0], 'wm');
-					else if (wmUrl.value) addPreview(wmUrl.value, 'wm-url');
+					else if (wmUrl.value) addPreview(wmUrl.value, 'wm');
 				}
-
 				mainFile.addEventListener('change', refreshPreviews);
 				mainUrl.addEventListener('input', refreshPreviews);
 				wmFile.addEventListener('change', refreshPreviews);
 				wmUrl.addEventListener('input', refreshPreviews);
 
 				function collectMetadata() {
-					// If raw JSON provided and valid, use it (worker will prefer metadata_json)
 					const raw = metadataJson.value && metadataJson.value.trim();
 					if (raw) {
 						try {
 							const parsed = JSON.parse(raw);
 							if (parsed && typeof parsed === 'object') return parsed;
-						} catch (e) {
-							// fall through to constructing from fields
-						}
+						} catch (e) {}
 					}
 					const out = {};
 					if (metaAuthor.value.trim()) out.Author = metaAuthor.value.trim();
 					if (metaDesc.value.trim()) out.Description = metaDesc.value.trim();
 					if (metaSource.value.trim()) out.Source = metaSource.value.trim();
-					const rows = metaRows.querySelectorAll('.meta-row');
-					rows.forEach((r) => {
-						const k = r.children[0].value.trim();
-						const v = r.children[1].value.trim();
+					metaRows.querySelectorAll('.meta-row').forEach((r) => {
+						const k = r.children[0].value.trim(),
+							v = r.children[1].value.trim();
 						if (k) out[k] = v;
 					});
 					return out;
 				}
 
+				function setResultText(txt) {
+					result.textContent = txt;
+				}
+
+				clearBtn.addEventListener('click', () => {
+					form.reset();
+					metadataJson.value = '';
+					metaRows.innerHTML = '';
+					createMetaRow('Copyright', '');
+					refreshPreviews();
+					result.innerHTML = '';
+				});
+
+				function isMainLikelyJpeg() {
+					// quick client-side heuristic:
+					if (mainFile.files && mainFile.files[0]) {
+						const t = mainFile.files[0].type || '';
+						return /jpeg|jpg/i.test(t);
+					}
+					const u = mainUrl.value && mainUrl.value.trim();
+					if (!u) return false;
+					return /\.(jpe?g)(\?.*)?$/i.test(u);
+				}
+
 				async function postProcessResponse(res) {
-					// If response is an image blob, create download link
-					const ct = res.headers.get('content-type') || '';
 					if (!res.ok) {
 						let err;
 						try {
 							err = await res.json();
-						} catch (_) {
+						} catch (e) {
 							err = { error: res.statusText };
 						}
-						result.textContent = 'Error: ' + (err?.error || JSON.stringify(err));
+						setResultText('Error: ' + (err?.error || JSON.stringify(err)));
 						return;
 					}
 					const blob = await res.blob();
@@ -402,58 +526,63 @@
 					const a = document.createElement('a');
 					a.href = url;
 					const disp = res.headers.get('content-disposition') || '';
-					// try to extract filename
 					let fname = 'protected-image';
-					const m = disp.match(/filename\\*=UTF-8''([^;\\n]+)/i) || disp.match(/filename=\"?([^\";\\n]+)\"?/i);
-					if (m && m[1]) fname = decodeURIComponent(m[1].replace(/\\s/g, '_'));
+					const m = disp.match(/filename\*=UTF-8''([^;\n]+)/i) || disp.match(/filename=\"?([^\";\n]+)\"?/i);
+					if (m && m[1]) fname = decodeURIComponent(m[1].replace(/\s/g, '_'));
 					a.download = fname;
-					a.textContent = 'Download protected image (' + (ct.split(';')[0] || 'image') + ')';
-					a.style.display = 'inline-block';
-					a.style.marginTop = '8px';
+					a.textContent = 'Download protected image';
+					a.className = 'btn';
 					result.innerHTML = '';
 					result.appendChild(a);
 				}
 
 				form.addEventListener('submit', async (ev) => {
 					ev.preventDefault();
-					result.textContent = 'Processing…';
-					submitBtn.disabled = true;
 					result.innerHTML = '';
+					setResultText('Processing…');
+					submitBtn.disabled = true;
+
+					// client-side sanity checks
+					const meta = collectMetadata();
+					const hasMetadata = Object.keys(meta).length > 0;
+					const hasMainFile = mainFile.files && mainFile.files[0];
+					const hasMainUrl = mainUrl.value && mainUrl.value.trim();
+
+					if (!hasMainFile && !hasMainUrl) {
+						setResultText('Provide a main image file or URL before submitting.');
+						submitBtn.disabled = false;
+						return;
+					}
+
+					if (hasMetadata && !isMainLikelyJpeg()) {
+						setResultText('When embedding metadata, the main image must be a JPEG. Provide a JPEG file or a .jpg/.jpeg URL.');
+						submitBtn.disabled = false;
+						return;
+					}
 
 					const fd = new FormData();
-
-					// Prefer file if provided, otherwise url
-					if (mainFile.files && mainFile.files[0]) fd.append('main_file', mainFile.files[0]);
-					else if (mainUrl.value.trim()) fd.append('main_url', mainUrl.value.trim());
-
+					if (hasMainFile) fd.append('main_file', mainFile.files[0]);
+					else if (hasMainUrl) fd.append('main_url', mainUrl.value.trim());
 					if (wmFile.files && wmFile.files[0]) fd.append('watermark_file', wmFile.files[0]);
 					else if (wmUrl.value.trim()) fd.append('watermark_url', wmUrl.value.trim());
-
-					// Add watermark transform options as meta fields the worker will translate to cf.image.draw
-					// We'll include them as top-level form fields to be safe (worker currently reads wm options from form or DOM)
 					fd.append('wm_size', wmSize.value);
 					fd.append('wm_opacity', wmOpacity.value);
 					fd.append('wm_gravity', wmGravity.value);
-
-					// Metadata: send metadata_json as worker prefers that
-					const meta = collectMetadata();
 					fd.append('metadata_json', JSON.stringify(meta));
 
 					try {
 						const res = await fetch('/process', { method: 'POST', body: fd });
 						await postProcessResponse(res);
 					} catch (err) {
-						result.textContent = 'Network or server error';
+						setResultText('Network or server error');
 					} finally {
 						submitBtn.disabled = false;
 					}
 				});
 
-				// small UX niceties: allow Enter to submit when focus in metadata JSON
+				// allow Ctrl/Cmd+Enter to submit from JSON textarea
 				metadataJson.addEventListener('keydown', (e) => {
-					if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-						submitBtn.click();
-					}
+					if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submitBtn.click();
 				});
 
 				// initial previews
