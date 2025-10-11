@@ -55,13 +55,25 @@ function logInfo(message: string, data?: any) {
 
 function logError(message: string, error?: any) {
 	try {
+		const errorData: any = {};
+		if (error) {
+			if (error instanceof Error) {
+				errorData.message = error.message;
+				errorData.stack = error.stack;
+				errorData.name = error.name;
+			} else if (typeof error === 'object') {
+				errorData.details = JSON.stringify(error);
+			} else {
+				errorData.value = String(error);
+			}
+		}
+
 		console.error(
 			JSON.stringify({
 				level: 'error',
 				requestId: globalLogContext.requestId,
 				message,
-				error: error?.message || String(error),
-				stack: error?.stack,
+				error: errorData,
 				timestamp: new Date().toISOString(),
 			})
 		);
@@ -787,6 +799,14 @@ export default {
 				opacity = Math.max(0, Math.min(1, opacity));
 
 				// Build transform request
+				// IMPORTANT: Cloudflare Image Transform requires publicly accessible URLs
+				// We cannot use /r2/ internal routes for watermark overlays
+				// Options:
+				// 1. Use R2 public bucket domain
+				// 2. Use custom domain with R2 bucket
+				// 3. Fetch watermark and use data URL (not recommended for large images)
+				// 4. Use external URL directly without storing in R2
+
 				const origin = new URL(request.url).origin;
 				const mainR2Url = `${origin}/r2/${encodeURIComponent(mainKey)}`;
 
@@ -796,9 +816,22 @@ export default {
 				};
 
 				if (watermarkKey) {
+					// For watermark to work with cf.image.draw, it needs a publicly accessible URL
+					// Option 1: If you have R2 public domain, use it
+					// const wmPublicUrl = `https://pub-YOUR-BUCKET-ID.r2.dev/${encodeURIComponent(watermarkKey)}`;
+
+					// Option 2: Use the same /r2/ endpoint (may not work due to Cloudflare restrictions)
 					const wmR2Url = `${origin}/r2/${encodeURIComponent(watermarkKey)}`;
+
+					// Option 3: If watermark was provided via URL, use original URL directly
+					const useOriginalWmUrl = wmUrl && wmUrl.trim().length > 0;
+					const finalWmUrl = useOriginalWmUrl ? wmUrl.trim() : wmR2Url;
+
 					const wmMarginDefault = 8;
-					const drawObj: any = { url: wmR2Url, opacity };
+					const drawObj: any = {
+						url: finalWmUrl,
+						opacity,
+					};
 
 					if (overlayWidthPx) {
 						drawObj.width = overlayWidthPx;
@@ -853,7 +886,13 @@ export default {
 					}
 
 					transformOptions.cf.image.draw = [drawObj];
-					logInfo('Watermark overlay configured', { gravity: grav, width: overlayWidthPx, opacity });
+					logInfo('Watermark overlay configured', {
+						gravity: grav,
+						width: overlayWidthPx,
+						opacity,
+						watermarkUrl: finalWmUrl,
+						usingOriginalUrl: useOriginalWmUrl,
+					});
 				}
 
 				// Call Cloudflare image transform
