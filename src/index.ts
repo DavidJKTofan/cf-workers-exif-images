@@ -173,31 +173,102 @@ function validateUrl(urlStr: string): { valid: boolean; url?: URL; error?: strin
 function verifyImageFormat(buffer: ArrayBuffer): { valid: boolean; type: string; error?: string } {
 	const u8 = new Uint8Array(buffer);
 
+	logInfo('Verifying image format', {
+		bufferSize: buffer.byteLength,
+		firstBytes: Array.from(u8.slice(0, 16))
+			.map((b) => '0x' + b.toString(16).padStart(2, '0'))
+			.join(' '),
+	});
+
 	if (u8.length < 8) {
 		return { valid: false, type: '', error: 'File too small to be valid image' };
 	}
 
-	// JPEG magic number
+	// JPEG magic number: FF D8 FF
 	if (u8[0] === 0xff && u8[1] === 0xd8 && u8[2] === 0xff) {
+		logInfo('Detected format: JPEG');
 		return { valid: true, type: 'image/jpeg' };
 	}
 
-	// PNG magic number
-	const pngSig = '\x89PNG\r\n\x1a\n';
-	if (decoder.decode(u8.subarray(0, 8)) === pngSig) {
+	// PNG magic number: 89 50 4E 47 0D 0A 1A 0A
+	const pngSig = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+	let isPng = true;
+	for (let i = 0; i < 8; i++) {
+		if (u8[i] !== pngSig[i]) {
+			isPng = false;
+			break;
+		}
+	}
+	if (isPng) {
+		logInfo('Detected format: PNG');
 		return { valid: true, type: 'image/png' };
 	}
 
-	// SVG (check first few bytes for <svg or <?xml)
-	const textStart = decoder.decode(u8.subarray(0, Math.min(100, u8.length)));
-	if (textStart.includes('<svg') || (textStart.includes('<?xml') && textStart.includes('<svg'))) {
-		return { valid: true, type: 'image/svg+xml' };
-	}
-
-	// WebP magic number
-	if (u8.length >= 12 && decoder.decode(u8.subarray(0, 4)) === 'RIFF' && decoder.decode(u8.subarray(8, 12)) === 'WEBP') {
+	// WebP magic number: RIFF....WEBP
+	if (
+		u8.length >= 12 &&
+		u8[0] === 0x52 &&
+		u8[1] === 0x49 &&
+		u8[2] === 0x46 &&
+		u8[3] === 0x46 && // RIFF
+		u8[8] === 0x57 &&
+		u8[9] === 0x45 &&
+		u8[10] === 0x42 &&
+		u8[11] === 0x50
+	) {
+		// WEBP
+		logInfo('Detected format: WebP');
 		return { valid: true, type: 'image/webp' };
 	}
+
+	// GIF magic number: GIF87a or GIF89a
+	if (
+		u8.length >= 6 &&
+		u8[0] === 0x47 &&
+		u8[1] === 0x49 &&
+		u8[2] === 0x46 && // GIF
+		u8[3] === 0x38 &&
+		(u8[4] === 0x37 || u8[4] === 0x39) &&
+		u8[5] === 0x61
+	) {
+		// 87a or 89a
+		logInfo('Detected format: GIF');
+		return { valid: true, type: 'image/gif' };
+	}
+
+	// SVG (text-based format)
+	try {
+		const textStart = decoder.decode(u8.subarray(0, Math.min(500, u8.length)));
+		if (textStart.includes('<svg') || (textStart.includes('<?xml') && textStart.includes('<svg'))) {
+			logInfo('Detected format: SVG');
+			return { valid: true, type: 'image/svg+xml' };
+		}
+	} catch (e) {
+		// Not valid UTF-8, can't be SVG
+	}
+
+	// BMP magic number: BM
+	if (u8.length >= 2 && u8[0] === 0x42 && u8[1] === 0x4d) {
+		logInfo('Detected format: BMP');
+		return { valid: true, type: 'image/bmp' };
+	}
+
+	// TIFF magic numbers: II (little-endian) or MM (big-endian)
+	if (
+		u8.length >= 4 &&
+		((u8[0] === 0x49 && u8[1] === 0x49 && u8[2] === 0x2a && u8[3] === 0x00) ||
+			(u8[0] === 0x4d && u8[1] === 0x4d && u8[2] === 0x00 && u8[3] === 0x2a))
+	) {
+		logInfo('Detected format: TIFF');
+		return { valid: true, type: 'image/tiff' };
+	}
+
+	logError('Unsupported image format', {
+		bufferSize: u8.length,
+		firstBytes: Array.from(u8.slice(0, 16))
+			.map((b) => '0x' + b.toString(16).padStart(2, '0'))
+			.join(' '),
+	});
 
 	return { valid: false, type: '', error: 'Unsupported image format' };
 }
@@ -254,9 +325,12 @@ function validateDimensions(dims: { w: number; h: number } | null): boolean {
 async function fetchResource(urlStr: string, label: string) {
 	const trimmed = urlStr.trim();
 
+	logInfo(`Starting fetch for ${label}`, { url: trimmed });
+
 	// Validate URL
 	const validation = validateUrl(trimmed);
 	if (!validation.valid) {
+		logError(`URL validation failed for ${label}`, { url: trimmed, reason: validation.error });
 		throw new Error(`${label}: ${validation.error}`);
 	}
 
@@ -264,8 +338,6 @@ async function fetchResource(urlStr: string, label: string) {
 	const timeoutId = setTimeout(() => controller.abort(), CONFIG.FETCH_TIMEOUT);
 
 	try {
-		logInfo(`Fetching ${label}`, { url: trimmed });
-
 		const res = await fetch(trimmed, {
 			signal: controller.signal,
 			redirect: 'follow',
@@ -277,6 +349,14 @@ async function fetchResource(urlStr: string, label: string) {
 
 		clearTimeout(timeoutId);
 
+		logInfo(`Fetch response for ${label}`, {
+			url: trimmed,
+			status: res.status,
+			statusText: res.statusText,
+			contentType: res.headers.get('content-type'),
+			contentLength: res.headers.get('content-length'),
+		});
+
 		if (!res.ok) {
 			throw new Error(`HTTP ${res.status}`);
 		}
@@ -285,13 +365,16 @@ async function fetchResource(urlStr: string, label: string) {
 
 		// Validate size
 		if (buf.byteLength > CONFIG.MAX_FILE_SIZE) {
+			logError(`File exceeds size limit for ${label}`, {
+				size: buf.byteLength,
+				limit: CONFIG.MAX_FILE_SIZE,
+			});
 			throw new Error(`File exceeds maximum size of ${CONFIG.MAX_FILE_SIZE} bytes`);
 		}
 
 		const ct = res.headers.get('content-type') || 'application/octet-stream';
 
-		logInfo(`Fetch successful`, {
-			label,
+		logInfo(`Fetch successful for ${label}`, {
 			url: trimmed,
 			bytes: buf.byteLength,
 			contentType: ct,
@@ -302,11 +385,15 @@ async function fetchResource(urlStr: string, label: string) {
 		clearTimeout(timeoutId);
 
 		if (err.name === 'AbortError') {
-			logError(`${label} fetch timeout`, err);
+			logError(`${label} fetch timeout`, { url: trimmed, timeout: CONFIG.FETCH_TIMEOUT });
 			throw new Error(`${label} fetch timeout after ${CONFIG.FETCH_TIMEOUT}ms`);
 		}
 
-		logError(`${label} fetch failed`, err);
+		logError(`${label} fetch failed`, {
+			url: trimmed,
+			error: err.message || String(err),
+			stack: err.stack,
+		});
 		throw new Error(`${label} fetch failed`);
 	}
 }
@@ -727,13 +814,19 @@ export default {
 
 				if (hasWatermark) {
 					try {
+						logInfo('Processing watermark', {
+							hasFile: !!(wmFile && wmFile.size > 0),
+							hasUrl: !!(wmUrl && wmUrl.trim().length > 0),
+							urlProvided: wmUrl,
+						});
+
 						if (wmFile && wmFile.size > 0) {
 							if (wmFile.size > CONFIG.MAX_FILE_SIZE) {
 								return okJson({ error: `Watermark file too large. Maximum: ${CONFIG.MAX_FILE_SIZE} bytes` }, 413);
 							}
 							wmBuf = await wmFile.arrayBuffer();
 							wmCt = wmFile.type || null;
-							logInfo('Watermark uploaded', { size: wmBuf.byteLength });
+							logInfo('Watermark uploaded', { size: wmBuf.byteLength, claimedType: wmCt });
 						} else if (wmUrl && wmUrl.trim().length > 0) {
 							const fetched = await fetchResource(wmUrl, 'watermark');
 							wmBuf = fetched.buffer;
@@ -741,13 +834,24 @@ export default {
 						}
 
 						if (wmBuf) {
+							logInfo('Verifying watermark format', {
+								bufferSize: wmBuf.byteLength,
+								claimedContentType: wmCt,
+							});
+
 							// Verify watermark format
 							const wmFormatCheck = verifyImageFormat(wmBuf);
 							if (!wmFormatCheck.valid) {
-								logError('Invalid watermark format', { error: wmFormatCheck.error });
-								return okJson({ error: 'Invalid watermark format' }, 400);
+								logError('Invalid watermark format', {
+									error: wmFormatCheck.error,
+									claimedType: wmCt,
+									bufferSize: wmBuf.byteLength,
+								});
+								return okJson({ error: `Invalid watermark format: ${wmFormatCheck.error}` }, 400);
 							}
 							wmCt = wmFormatCheck.type;
+
+							logInfo('Watermark format verified', { detectedType: wmCt });
 
 							// Get watermark dimensions
 							if (wmCt.includes('png')) {
@@ -756,20 +860,38 @@ export default {
 								wmDims = getJpegDimensions(wmBuf);
 							}
 
-							if (wmDims && !validateDimensions(wmDims)) {
-								logError('Watermark dimensions invalid', { dims: wmDims });
-								return okJson({ error: 'Watermark dimensions invalid or too large' }, 400);
+							if (wmDims) {
+								logInfo('Watermark dimensions extracted', { width: wmDims.w, height: wmDims.h });
+
+								if (!validateDimensions(wmDims)) {
+									logError('Watermark dimensions invalid', {
+										dims: wmDims,
+										maxAllowed: CONFIG.MAX_DIMENSION,
+									});
+									return okJson({ error: 'Watermark dimensions invalid or too large' }, 400);
+								}
+							} else {
+								logInfo('Could not extract watermark dimensions (non-critical)');
 							}
 
 							const wmHash = await hashBufferHex(wmBuf);
 							const wmExt = extFromContentType(wmCt);
 							watermarkKey = `wm-${wmHash}.${wmExt}`;
+
+							logInfo('Storing watermark to R2', { key: watermarkKey });
 							await putToR2(env, watermarkKey, wmBuf, wmCt);
 
-							logInfo('Watermark processed', { dims: wmDims, key: watermarkKey });
+							logInfo('Watermark processed successfully', {
+								dims: wmDims,
+								key: watermarkKey,
+								type: wmCt,
+							});
 						}
 					} catch (err: any) {
-						logError('Watermark processing failed', err);
+						logError('Watermark processing failed', {
+							error: err.message || String(err),
+							stack: err.stack,
+						});
 						return okJson({ error: 'Failed to process watermark' }, 400);
 					}
 				} else {
