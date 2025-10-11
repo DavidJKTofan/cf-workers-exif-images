@@ -699,22 +699,39 @@
 					// Check which watermark type is active
 					const activeTab = document.querySelector('.tab.active').dataset.tab;
 
+					console.log('Active tab:', activeTab);
+					console.log('Text watermark value:', wmText.value);
+
 					if (activeTab === 'text' && wmText.value.trim()) {
 						// Text watermark
-						fd.append('watermark_text', wmText.value.trim());
+						const textValue = wmText.value.trim();
+						console.log('Sending text watermark:', textValue);
+						fd.append('watermark_text', textValue);
 						fd.append('wm_text_size', wmTextSize.value);
 						fd.append('wm_text_color', wmTextColor.value);
 						fd.append('wm_text_font', wmTextFont.value);
 						fd.append('wm_text_weight', wmTextWeight.value);
 						fd.append('wm_opacity', wmTextOpacity.value);
 						fd.append('wm_gravity', wmTextGravity.value);
+						console.log('Text watermark params:', {
+							text: textValue,
+							size: wmTextSize.value,
+							color: wmTextColor.value,
+							font: wmTextFont.value,
+							weight: wmTextWeight.value,
+							opacity: wmTextOpacity.value,
+							gravity: wmTextGravity.value,
+						});
 					} else if (activeTab === 'image') {
 						// Image watermark
+						console.log('Sending image watermark');
 						if (wmFile.files && wmFile.files[0]) fd.append('watermark_file', wmFile.files[0]);
 						else if (wmUrl.value.trim()) fd.append('watermark_url', wmUrl.value.trim());
 						fd.append('wm_size', wmSize.value);
 						fd.append('wm_opacity', wmOpacity.value);
 						fd.append('wm_gravity', wmGravity.value);
+					} else {
+						console.log('No watermark selected or text is empty');
 					}
 
 					fd.append('metadata_json', JSON.stringify(meta));
