@@ -710,51 +710,58 @@ export default {
 				let wmCt: string | null = null;
 				let wmDims: { w: number; h: number } | null = null;
 
-				try {
-					if (wmFile && wmFile.size > 0) {
-						if (wmFile.size > CONFIG.MAX_FILE_SIZE) {
-							return okJson({ error: `Watermark file too large. Maximum: ${CONFIG.MAX_FILE_SIZE} bytes` }, 413);
+				// Only process watermark if one was provided
+				const hasWatermark = (wmFile && wmFile.size > 0) || (wmUrl && wmUrl.trim().length > 0);
+
+				if (hasWatermark) {
+					try {
+						if (wmFile && wmFile.size > 0) {
+							if (wmFile.size > CONFIG.MAX_FILE_SIZE) {
+								return okJson({ error: `Watermark file too large. Maximum: ${CONFIG.MAX_FILE_SIZE} bytes` }, 413);
+							}
+							wmBuf = await wmFile.arrayBuffer();
+							wmCt = wmFile.type || null;
+							logInfo('Watermark uploaded', { size: wmBuf.byteLength });
+						} else if (wmUrl && wmUrl.trim().length > 0) {
+							const fetched = await fetchResource(wmUrl, 'watermark');
+							wmBuf = fetched.buffer;
+							wmCt = fetched.contentType;
 						}
-						wmBuf = await wmFile.arrayBuffer();
-						wmCt = wmFile.type || null;
-						logInfo('Watermark uploaded', { size: wmBuf.byteLength });
-					} else if (wmUrl) {
-						const fetched = await fetchResource(wmUrl, 'watermark');
-						wmBuf = fetched.buffer;
-						wmCt = fetched.contentType;
+
+						if (wmBuf) {
+							// Verify watermark format
+							const wmFormatCheck = verifyImageFormat(wmBuf);
+							if (!wmFormatCheck.valid) {
+								logError('Invalid watermark format', { error: wmFormatCheck.error });
+								return okJson({ error: 'Invalid watermark format' }, 400);
+							}
+							wmCt = wmFormatCheck.type;
+
+							// Get watermark dimensions
+							if (wmCt.includes('png')) {
+								wmDims = getPngDimensions(wmBuf);
+							} else if (wmCt.includes('jpeg') || wmCt.includes('jpg')) {
+								wmDims = getJpegDimensions(wmBuf);
+							}
+
+							if (wmDims && !validateDimensions(wmDims)) {
+								logError('Watermark dimensions invalid', { dims: wmDims });
+								return okJson({ error: 'Watermark dimensions invalid or too large' }, 400);
+							}
+
+							const wmHash = await hashBufferHex(wmBuf);
+							const wmExt = extFromContentType(wmCt);
+							watermarkKey = `wm-${wmHash}.${wmExt}`;
+							await putToR2(env, watermarkKey, wmBuf, wmCt);
+
+							logInfo('Watermark processed', { dims: wmDims, key: watermarkKey });
+						}
+					} catch (err: any) {
+						logError('Watermark processing failed', err);
+						return okJson({ error: 'Failed to process watermark' }, 400);
 					}
-
-					if (wmBuf) {
-						// Verify watermark format
-						const wmFormatCheck = verifyImageFormat(wmBuf);
-						if (!wmFormatCheck.valid) {
-							logError('Invalid watermark format', { error: wmFormatCheck.error });
-							return okJson({ error: 'Invalid watermark format' }, 400);
-						}
-						wmCt = wmFormatCheck.type;
-
-						// Get watermark dimensions
-						if (wmCt.includes('png')) {
-							wmDims = getPngDimensions(wmBuf);
-						} else if (wmCt.includes('jpeg') || wmCt.includes('jpg')) {
-							wmDims = getJpegDimensions(wmBuf);
-						}
-
-						if (wmDims && !validateDimensions(wmDims)) {
-							logError('Watermark dimensions invalid', { dims: wmDims });
-							return okJson({ error: 'Watermark dimensions invalid or too large' }, 400);
-						}
-
-						const wmHash = await hashBufferHex(wmBuf);
-						const wmExt = extFromContentType(wmCt);
-						watermarkKey = `wm-${wmHash}.${wmExt}`;
-						await putToR2(env, watermarkKey, wmBuf, wmCt);
-
-						logInfo('Watermark processed', { dims: wmDims, key: watermarkKey });
-					}
-				} catch (err: any) {
-					logError('Watermark processing failed', err);
-					return okJson({ error: 'Failed to process watermark' }, 400);
+				} else {
+					logInfo('No watermark provided, skipping watermark processing');
 				}
 
 				// Calculate overlay width (percent or pixels)
