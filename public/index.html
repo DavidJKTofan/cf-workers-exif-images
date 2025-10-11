@@ -101,6 +101,7 @@
 			}
 			input[type='url'],
 			input[type='text'],
+			input[type='color'],
 			textarea,
 			select {
 				width: 100%;
@@ -110,6 +111,11 @@
 				background: #fbfdff;
 				box-sizing: border-box;
 				font-size: 14px;
+			}
+			input[type='color'] {
+				height: 40px;
+				padding: 4px;
+				cursor: pointer;
 			}
 			textarea {
 				min-height: 88px;
@@ -158,6 +164,37 @@
 			.small {
 				font-size: 13px;
 				color: var(--muted);
+			}
+
+			.tabs {
+				display: flex;
+				gap: 4px;
+				margin-bottom: 12px;
+				border-bottom: 1px solid #e6eefb;
+			}
+			.tab {
+				padding: 10px 16px;
+				background: transparent;
+				border: none;
+				border-bottom: 2px solid transparent;
+				cursor: pointer;
+				font-weight: 600;
+				font-size: 14px;
+				color: var(--muted);
+				transition: all 0.2s;
+			}
+			.tab:hover {
+				color: var(--accent);
+			}
+			.tab.active {
+				color: var(--accent);
+				border-bottom-color: var(--accent);
+			}
+			.tab-content {
+				display: none;
+			}
+			.tab-content.active {
+				display: block;
 			}
 
 			.meta-area {
@@ -243,6 +280,9 @@
 					width: 44px;
 					height: 44px;
 				}
+				.tabs {
+					overflow-x: auto;
+				}
 			}
 		</style>
 	</head>
@@ -253,7 +293,7 @@
 					<div class="logo">IP</div>
 					<div>
 						<h1 id="title">Image Protector</h1>
-						<p class="lead">Embed EXIF metadata into JPEGs and optionally apply a resized watermark before publishing.</p>
+						<p class="lead">Embed EXIF metadata into JPEGs and optionally apply a watermark (image or text) before publishing.</p>
 					</div>
 				</header>
 
@@ -262,14 +302,14 @@
 						<legend>Main image</legend>
 						<div class="grid-2">
 							<div>
-								<label for="mainFile">Main image — file (preferred)</label>
+								<label for="mainFile">Main image – file (preferred)</label>
 								<input id="mainFile" name="main_file" type="file" accept="image/jpeg,image/jpg" />
 								<div class="small muted">
 									Only JPEG is allowed when embedding EXIF metadata. Otherwise watermarking works with other formats.
 								</div>
 							</div>
 							<div>
-								<label for="mainUrl">Main image — public URL</label>
+								<label for="mainUrl">Main image – public URL</label>
 								<input id="mainUrl" name="main_url" type="url" placeholder="https://example.com/image.jpg" />
 							</div>
 						</div>
@@ -277,45 +317,112 @@
 
 					<fieldset>
 						<legend>Watermark (optional)</legend>
-						<div class="grid-2">
-							<div>
-								<label for="wmFile">Watermark — file</label>
-								<input id="wmFile" name="watermark_file" type="file" accept="image/*" />
+
+						<div class="tabs">
+							<button type="button" class="tab active" data-tab="image">Image Watermark</button>
+							<button type="button" class="tab" data-tab="text">Text Watermark</button>
+						</div>
+
+						<!-- Image Watermark Tab -->
+						<div class="tab-content active" data-tab-content="image">
+							<div class="grid-2">
+								<div>
+									<label for="wmFile">Watermark – file</label>
+									<input id="wmFile" name="watermark_file" type="file" accept="image/*" />
+								</div>
+								<div>
+									<label for="wmUrl">Watermark – public URL</label>
+									<input id="wmUrl" name="watermark_url" type="url" placeholder="https://example.com/wm.png" />
+								</div>
 							</div>
-							<div>
-								<label for="wmUrl">Watermark — public URL</label>
-								<input id="wmUrl" name="watermark_url" type="url" placeholder="https://example.com/wm.png" />
+
+							<div style="display: flex; gap: 12px; margin-top: 12px; align-items: flex-end; flex-wrap: wrap">
+								<div style="min-width: 170px">
+									<label for="wmSize">Watermark size</label>
+									<select id="wmSize">
+										<option value="10p">10%</option>
+										<option value="15p">15%</option>
+										<option value="20p" selected>20%</option>
+										<option value="30p">30%</option>
+									</select>
+								</div>
+								<div style="min-width: 140px">
+									<label for="wmOpacity">Opacity</label>
+									<select id="wmOpacity">
+										<option value="30">30%</option>
+										<option value="45">45%</option>
+										<option value="60" selected>60%</option>
+										<option value="80">80%</option>
+									</select>
+								</div>
+								<div style="min-width: 140px">
+									<label for="wmGravity">Gravity</label>
+									<select id="wmGravity">
+										<option value="center" selected>Center</option>
+										<option value="northwest">Top-left</option>
+										<option value="northeast">Top-right</option>
+										<option value="southwest">Bottom-left</option>
+										<option value="southeast">Bottom-right</option>
+									</select>
+								</div>
 							</div>
 						</div>
 
-						<div style="display: flex; gap: 12px; margin-top: 12px; align-items: flex-end; flex-wrap: wrap">
-							<div style="min-width: 170px">
-								<label for="wmSize">Watermark size</label>
-								<select id="wmSize">
-									<option value="10p">10%</option>
-									<option value="15p">15%</option>
-									<option value="20p" selected>20%</option>
-									<option value="30p">30%</option>
-								</select>
+						<!-- Text Watermark Tab -->
+						<div class="tab-content" data-tab-content="text">
+							<div style="margin-bottom: 12px">
+								<label for="wmText">Watermark text</label>
+								<input id="wmText" name="watermark_text" type="text" placeholder="© 2024 Your Company" />
 							</div>
-							<div style="min-width: 140px">
-								<label for="wmOpacity">Opacity</label>
-								<select id="wmOpacity">
-									<option value="30">30%</option>
-									<option value="45">45%</option>
-									<option value="60" selected>60%</option>
-									<option value="80">80%</option>
-								</select>
+
+							<div style="display: flex; gap: 12px; flex-wrap: wrap">
+								<div style="flex: 1; min-width: 120px">
+									<label for="wmTextSize">Font size (px)</label>
+									<input id="wmTextSize" type="number" min="12" max="500" value="48" />
+								</div>
+								<div style="flex: 1; min-width: 120px">
+									<label for="wmTextColor">Color</label>
+									<input id="wmTextColor" type="color" value="#ffffff" />
+								</div>
+								<div style="flex: 1; min-width: 120px">
+									<label for="wmTextFont">Font</label>
+									<select id="wmTextFont">
+										<option value="sans-serif" selected>Sans-serif</option>
+										<option value="serif">Serif</option>
+										<option value="monospace">Monospace</option>
+									</select>
+								</div>
+								<div style="flex: 1; min-width: 120px">
+									<label for="wmTextWeight">Weight</label>
+									<select id="wmTextWeight">
+										<option value="normal">Normal</option>
+										<option value="bold" selected>Bold</option>
+										<option value="900">Black</option>
+									</select>
+								</div>
 							</div>
-							<div style="min-width: 140px">
-								<label for="wmGravity">Gravity</label>
-								<select id="wmGravity">
-									<option value="center" selected>Center</option>
-									<option value="northwest">Top-left</option>
-									<option value="northeast">Top-right</option>
-									<option value="southwest">Bottom-left</option>
-									<option value="southeast">Bottom-right</option>
-								</select>
+
+							<div style="display: flex; gap: 12px; margin-top: 12px; align-items: flex-end; flex-wrap: wrap">
+								<div style="min-width: 140px">
+									<label for="wmTextOpacity">Opacity</label>
+									<select id="wmTextOpacity">
+										<option value="30">30%</option>
+										<option value="45">45%</option>
+										<option value="60" selected>60%</option>
+										<option value="80">80%</option>
+										<option value="100">100%</option>
+									</select>
+								</div>
+								<div style="min-width: 140px">
+									<label for="wmTextGravity">Position</label>
+									<select id="wmTextGravity">
+										<option value="center" selected>Center</option>
+										<option value="northwest">Top-left</option>
+										<option value="northeast">Top-right</option>
+										<option value="southwest">Bottom-left</option>
+										<option value="southeast">Bottom-right</option>
+									</select>
+								</div>
 							</div>
 						</div>
 					</fieldset>
@@ -342,7 +449,7 @@
 						</div>
 
 						<div style="margin-top: 12px">
-							<label for="metadataJson">Raw metadata JSON (optional — overrides fields)</label>
+							<label for="metadataJson">Raw metadata JSON (optional – overrides fields)</label>
 							<textarea id="metadataJson" name="metadata_json" placeholder='{"Author":"Alice","Source":"example.com"}'></textarea>
 						</div>
 					</fieldset>
@@ -376,7 +483,6 @@
 				</footer>
 			</section>
 		</div>
-
 		<script>
 			(function () {
 				const form = document.getElementById('uploadForm');
@@ -384,6 +490,7 @@
 				const mainUrl = document.getElementById('mainUrl');
 				const wmFile = document.getElementById('wmFile');
 				const wmUrl = document.getElementById('wmUrl');
+				const wmText = document.getElementById('wmText');
 				const metadataJson = document.getElementById('metadataJson');
 				const metaRows = document.getElementById('metaRows');
 				const addMeta = document.getElementById('addMeta');
@@ -396,7 +503,36 @@
 				const wmSize = document.getElementById('wmSize');
 				const wmOpacity = document.getElementById('wmOpacity');
 				const wmGravity = document.getElementById('wmGravity');
+				const wmTextSize = document.getElementById('wmTextSize');
+				const wmTextColor = document.getElementById('wmTextColor');
+				const wmTextFont = document.getElementById('wmTextFont');
+				const wmTextWeight = document.getElementById('wmTextWeight');
+				const wmTextOpacity = document.getElementById('wmTextOpacity');
+				const wmTextGravity = document.getElementById('wmTextGravity');
 				const clearBtn = document.getElementById('clearBtn');
+
+				// Tab switching functionality
+				const tabs = document.querySelectorAll('.tab');
+				const tabContents = document.querySelectorAll('.tab-content');
+
+				tabs.forEach((tab) => {
+					tab.addEventListener('click', () => {
+						const tabName = tab.dataset.tab;
+
+						// Update tab buttons
+						tabs.forEach((t) => t.classList.remove('active'));
+						tab.classList.add('active');
+
+						// Update tab content
+						tabContents.forEach((content) => {
+							if (content.dataset.tabContent === tabName) {
+								content.classList.add('active');
+							} else {
+								content.classList.remove('active');
+							}
+						});
+					});
+				});
 
 				function createMetaRow(key = '', value = '') {
 					const wrap = document.createElement('div');
@@ -422,10 +558,8 @@
 					return wrap;
 				}
 
-				// wire the Add pair button (was missing)
 				if (addMeta) addMeta.addEventListener('click', () => createMetaRow());
 
-				// ensure at least one row exists
 				if (!metaRows.querySelector('.meta-row')) createMetaRow('Copyright', '');
 
 				function clearPreviews() {
@@ -500,7 +634,6 @@
 				});
 
 				function isMainLikelyJpeg() {
-					// quick client-side heuristic:
 					if (mainFile.files && mainFile.files[0]) {
 						const t = mainFile.files[0].type || '';
 						return /jpeg|jpg/i.test(t);
@@ -542,7 +675,6 @@
 					setResultText('Processing…');
 					submitBtn.disabled = true;
 
-					// client-side sanity checks
 					const meta = collectMetadata();
 					const hasMetadata = Object.keys(meta).length > 0;
 					const hasMainFile = mainFile.files && mainFile.files[0];
@@ -563,11 +695,28 @@
 					const fd = new FormData();
 					if (hasMainFile) fd.append('main_file', mainFile.files[0]);
 					else if (hasMainUrl) fd.append('main_url', mainUrl.value.trim());
-					if (wmFile.files && wmFile.files[0]) fd.append('watermark_file', wmFile.files[0]);
-					else if (wmUrl.value.trim()) fd.append('watermark_url', wmUrl.value.trim());
-					fd.append('wm_size', wmSize.value);
-					fd.append('wm_opacity', wmOpacity.value);
-					fd.append('wm_gravity', wmGravity.value);
+
+					// Check which watermark type is active
+					const activeTab = document.querySelector('.tab.active').dataset.tab;
+
+					if (activeTab === 'text' && wmText.value.trim()) {
+						// Text watermark
+						fd.append('watermark_text', wmText.value.trim());
+						fd.append('wm_text_size', wmTextSize.value);
+						fd.append('wm_text_color', wmTextColor.value);
+						fd.append('wm_text_font', wmTextFont.value);
+						fd.append('wm_text_weight', wmTextWeight.value);
+						fd.append('wm_opacity', wmTextOpacity.value);
+						fd.append('wm_gravity', wmTextGravity.value);
+					} else if (activeTab === 'image') {
+						// Image watermark
+						if (wmFile.files && wmFile.files[0]) fd.append('watermark_file', wmFile.files[0]);
+						else if (wmUrl.value.trim()) fd.append('watermark_url', wmUrl.value.trim());
+						fd.append('wm_size', wmSize.value);
+						fd.append('wm_opacity', wmOpacity.value);
+						fd.append('wm_gravity', wmGravity.value);
+					}
+
 					fd.append('metadata_json', JSON.stringify(meta));
 
 					try {
@@ -580,12 +729,10 @@
 					}
 				});
 
-				// allow Ctrl/Cmd+Enter to submit from JSON textarea
 				metadataJson.addEventListener('keydown', (e) => {
 					if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submitBtn.click();
 				});
 
-				// initial previews
 				refreshPreviews();
 			})();
 		</script>
