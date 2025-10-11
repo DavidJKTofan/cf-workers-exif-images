@@ -114,7 +114,51 @@ function toArrayBuffer(u: Uint8Array): ArrayBuffer {
 	return ArrayBuffer.prototype.slice.call(u.buffer, u.byteOffset, u.byteOffset + u.byteLength) as ArrayBuffer;
 }
 
-/* ---------- Security: SSRF Protection ---------- */
+/* ---------- Text to SVG watermark generator ---------- */
+
+function generateTextSvg(
+	text: string,
+	options: {
+		size?: number;
+		color?: string;
+		font?: string;
+		weight?: string;
+	}
+): string {
+	const size = options.size || 48;
+	const color = options.color || '#ffffff';
+	const font = options.font || 'sans-serif';
+	const weight = options.weight || 'bold';
+
+	// Escape XML special characters
+	const escapeXml = (s: string) =>
+		s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+
+	const escapedText = escapeXml(text);
+
+	// Estimate text width (rough approximation: 0.6 * fontSize * characterCount)
+	const estimatedWidth = Math.ceil(size * 0.6 * text.length);
+	const height = Math.ceil(size * 1.5); // Give some vertical padding
+	const width = Math.max(estimatedWidth, size * 2); // Minimum width
+
+	// Create SVG with text element
+	const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+  <text 
+    x="50%" 
+    y="50%" 
+    font-family="${escapeXml(font)}" 
+    font-size="${size}" 
+    font-weight="${weight}" 
+    fill="${escapeXml(color)}" 
+    text-anchor="middle" 
+    dominant-baseline="middle">${escapedText}</text>
+</svg>`;
+
+	return svg;
+}
+
+/* ---------- SSRF Protection ---------- */
 
 function isPrivateIP(hostname: string): boolean {
 	// IPv4 private ranges
@@ -834,6 +878,8 @@ export default {
 
 				// Determine watermark type (file, URL, or text)
 				let watermarkType: 'none' | 'image' | 'text' = 'none';
+				let textSvgKey: string | null = null;
+
 				if (wmText && wmText.trim().length > 0) {
 					watermarkType = 'text';
 				} else if ((wmFile && wmFile.size > 0) || (wmUrl && wmUrl.trim().length > 0)) {
@@ -846,6 +892,50 @@ export default {
 					hasUrl: !!(wmUrl && wmUrl.trim().length > 0),
 					hasText: !!(wmText && wmText.trim().length > 0),
 				});
+
+				// Generate SVG for text watermark
+				if (watermarkType === 'text') {
+					try {
+						logInfo('Generating SVG from text watermark', {
+							text: wmText.trim(),
+							size: wmTextSize,
+							color: wmTextColor,
+							font: wmTextFont,
+							weight: wmTextWeight,
+						});
+
+						const textSize = parseInt(wmTextSize, 10);
+						const validatedSize = isNaN(textSize) ? 48 : Math.min(Math.max(textSize, 12), 500);
+
+						const svgContent = generateTextSvg(wmText.trim(), {
+							size: validatedSize,
+							color: wmTextColor,
+							font: wmTextFont,
+							weight: wmTextWeight,
+						});
+
+						const svgBuffer = encoder.encode(svgContent);
+						const svgHash = await hashBufferHex(toArrayBuffer(svgBuffer));
+						textSvgKey = `text-wm-${svgHash}.svg`;
+
+						logInfo('Generated SVG watermark', {
+							key: textSvgKey,
+							size: svgBuffer.length,
+							textLength: wmText.trim().length,
+						});
+
+						// Store SVG to R2
+						await putToR2(env, textSvgKey, toArrayBuffer(svgBuffer), 'image/svg+xml');
+
+						logInfo('Text SVG watermark stored to R2', { key: textSvgKey });
+					} catch (err: any) {
+						logError('Failed to generate text watermark SVG', {
+							error: err.message || String(err),
+							stack: err.stack,
+						});
+						return okJson({ error: 'Failed to generate text watermark' }, 500);
+					}
+				}
 
 				// Load image watermark (if type is 'image')
 				let watermarkKey: string | null = null;
