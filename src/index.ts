@@ -700,14 +700,43 @@ export default {
 
 				const form = await request.formData();
 
+				// Log all form entries for debugging
+				const formEntries: Record<string, any> = {};
+				for (const [key, value] of form.entries()) {
+					if (value instanceof File) {
+						formEntries[key] = `File: ${value.name} (${value.size} bytes)`;
+					} else {
+						formEntries[key] = value;
+					}
+				}
+				logInfo('Form data received', { entries: formEntries });
+
 				const mainFile = form.get('main_file') as File | null;
 				const mainUrl = (form.get('main_url') as string) || '';
 				const wmFile = form.get('watermark_file') as File | null;
 				const wmUrl = (form.get('watermark_url') as string) || '';
+				const wmText = (form.get('watermark_text') as string) || '';
 				const rawMeta = (form.get('metadata_json') as string) || null;
 				const wmSizeRaw = (form.get('wm_size') as string) || '20p';
 				const wmOpacityRaw = (form.get('wm_opacity') as string) || '60';
 				const wmGravity = (form.get('wm_gravity') as string) || 'center';
+
+				// Text watermark specific options
+				const wmTextColor = (form.get('wm_text_color') as string) || 'white';
+				const wmTextSize = (form.get('wm_text_size') as string) || '48';
+				const wmTextFont = (form.get('wm_text_font') as string) || 'sans-serif';
+				const wmTextWeight = (form.get('wm_text_weight') as string) || 'bold';
+
+				logInfo('Parsed watermark parameters', {
+					hasWmFile: !!(wmFile && wmFile.size > 0),
+					hasWmUrl: !!(wmUrl && wmUrl.trim()),
+					hasWmText: !!(wmText && wmText.trim()),
+					wmText: wmText || '(empty)',
+					wmTextSize,
+					wmTextColor,
+					wmTextFont,
+					wmTextWeight,
+				});
 
 				// Validate metadata size
 				if (rawMeta && rawMeta.length > CONFIG.MAX_METADATA_SIZE) {
@@ -803,16 +832,28 @@ export default {
 
 				logInfo('Main image processed', { dims: mainDims });
 
-				// Load watermark (optional)
+				// Determine watermark type (file, URL, or text)
+				let watermarkType: 'none' | 'image' | 'text' = 'none';
+				if (wmText && wmText.trim().length > 0) {
+					watermarkType = 'text';
+				} else if ((wmFile && wmFile.size > 0) || (wmUrl && wmUrl.trim().length > 0)) {
+					watermarkType = 'image';
+				}
+
+				logInfo('Watermark type determined', {
+					type: watermarkType,
+					hasFile: !!(wmFile && wmFile.size > 0),
+					hasUrl: !!(wmUrl && wmUrl.trim().length > 0),
+					hasText: !!(wmText && wmText.trim().length > 0),
+				});
+
+				// Load image watermark (if type is 'image')
 				let watermarkKey: string | null = null;
 				let wmBuf: ArrayBuffer | null = null;
 				let wmCt: string | null = null;
 				let wmDims: { w: number; h: number } | null = null;
 
-				// Only process watermark if one was provided
-				const hasWatermark = (wmFile && wmFile.size > 0) || (wmUrl && wmUrl.trim().length > 0);
-
-				if (hasWatermark) {
+				if (watermarkType === 'image') {
 					try {
 						logInfo('Processing watermark', {
 							hasFile: !!(wmFile && wmFile.size > 0),
@@ -895,22 +936,25 @@ export default {
 						return okJson({ error: 'Failed to process watermark' }, 400);
 					}
 				} else {
-					logInfo('No watermark provided, skipping watermark processing');
+					logInfo('No image watermark provided');
 				}
 
-				// Calculate overlay width (percent or pixels)
-				let overlayWidthPx = parseSizeToPixels(wmSizeRaw, mainDims?.w);
-				if (!overlayWidthPx && mainDims?.w) {
-					overlayWidthPx = Math.max(1, Math.round(mainDims.w * 0.2));
-				}
+				// Calculate overlay width (for image watermarks only)
+				let overlayWidthPx: number | undefined = undefined;
+				if (watermarkType === 'image') {
+					overlayWidthPx = parseSizeToPixels(wmSizeRaw, mainDims?.w);
+					if (!overlayWidthPx && mainDims?.w) {
+						overlayWidthPx = Math.max(1, Math.round(mainDims.w * 0.2));
+					}
 
-				// Clamp to policy - avoid covering entire image
-				if (mainDims?.w && overlayWidthPx) {
-					const maxAllowed = Math.max(1, Math.round(mainDims.w * CONFIG.MAX_WM_RATIO));
-					if (overlayWidthPx >= mainDims.w) {
-						overlayWidthPx = maxAllowed;
-					} else if (overlayWidthPx > maxAllowed) {
-						overlayWidthPx = maxAllowed;
+					// Clamp to policy - avoid covering entire image
+					if (mainDims?.w && overlayWidthPx) {
+						const maxAllowed = Math.max(1, Math.round(mainDims.w * CONFIG.MAX_WM_RATIO));
+						if (overlayWidthPx >= mainDims.w) {
+							overlayWidthPx = maxAllowed;
+						} else if (overlayWidthPx > maxAllowed) {
+							overlayWidthPx = maxAllowed;
+						}
 					}
 				}
 
@@ -921,13 +965,8 @@ export default {
 				opacity = Math.max(0, Math.min(1, opacity));
 
 				// Build transform request
-				// IMPORTANT: Cloudflare Image Transform requires publicly accessible URLs
-				// We cannot use /r2/ internal routes for watermark overlays
-				// Options:
-				// 1. Use R2 public bucket domain
-				// 2. Use custom domain with R2 bucket
-				// 3. Fetch watermark and use data URL (not recommended for large images)
-				// 4. Use external URL directly without storing in R2
+				// IMPORTANT: Cloudflare Image Transform requires publicly accessible URLs for image overlays
+				// Text overlays work directly without external URLs
 
 				const origin = new URL(request.url).origin;
 				const mainR2Url = `${origin}/r2/${encodeURIComponent(mainKey)}`;
@@ -937,17 +976,85 @@ export default {
 					headers: { 'User-Agent': USER_AGENT },
 				};
 
-				if (watermarkKey) {
-					// For watermark to work with cf.image.draw, it needs a publicly accessible URL
-					// Option 1: If you have R2 public domain, use it
-					// const wmPublicUrl = `https://pub-YOUR-BUCKET-ID.r2.dev/${encodeURIComponent(watermarkKey)}`;
+				// Add watermark overlay based on type
+				if (watermarkType === 'text' && wmText) {
+					// Text watermark using Cloudflare's text overlay
+					const grav = (wmGravity || 'center').toString().toLowerCase();
+					const wmMarginDefault = 16; // Larger margin for text
+					const margin = Math.max(wmMarginDefault, Math.round((mainDims?.w || 200) * 0.03));
 
-					// Option 2: Use the same /r2/ endpoint (may not work due to Cloudflare restrictions)
-					const wmR2Url = `${origin}/r2/${encodeURIComponent(watermarkKey)}`;
+					// Parse text size
+					let textSize = parseInt(wmTextSize, 10);
+					if (isNaN(textSize) || textSize <= 0) textSize = 48;
+					if (textSize > 500) textSize = 500; // Cap at 500px
 
-					// Option 3: If watermark was provided via URL, use original URL directly
+					const drawObj: any = {
+						text: wmText.trim(),
+						size: textSize,
+						color: wmTextColor || 'white',
+						font: wmTextFont || 'sans-serif',
+						weight: wmTextWeight || 'bold',
+						opacity: opacity,
+					};
+
+					// Map gravity to positioning for text
+					switch (grav) {
+						case 'northwest':
+						case 'top-left':
+							drawObj.top = margin;
+							drawObj.left = margin;
+							break;
+						case 'northeast':
+						case 'top-right':
+							drawObj.top = margin;
+							drawObj.right = margin;
+							break;
+						case 'southwest':
+						case 'bottom-left':
+							drawObj.bottom = margin;
+							drawObj.left = margin;
+							break;
+						case 'southeast':
+						case 'bottom-right':
+							drawObj.bottom = margin;
+							drawObj.right = margin;
+							break;
+						case 'north':
+						case 'top':
+							drawObj.top = margin;
+							break;
+						case 'south':
+						case 'bottom':
+							drawObj.bottom = margin;
+							break;
+						case 'west':
+						case 'left':
+							drawObj.left = margin;
+							break;
+						case 'east':
+						case 'right':
+							drawObj.right = margin;
+							break;
+						case 'center':
+						default:
+							// Centered - no offsets
+							break;
+					}
+
+					transformOptions.cf.image.draw = [drawObj];
+					logInfo('Text watermark configured', {
+						text: wmText.trim(),
+						gravity: grav,
+						size: textSize,
+						color: wmTextColor,
+						font: wmTextFont,
+						weight: wmTextWeight,
+						opacity,
+					});
+				} else if (watermarkType === 'image' && watermarkKey) {
+					// Image watermark overlay
 					const useOriginalWmUrl = wmUrl && wmUrl.trim().length > 0;
-					const finalWmUrl = useOriginalWmUrl ? wmUrl.trim() : wmR2Url;
+					const finalWmUrl = useOriginalWmUrl ? wmUrl.trim() : `${origin}/r2/${encodeURIComponent(watermarkKey)}`;
 
 					const wmMarginDefault = 8;
 					const drawObj: any = {
@@ -1008,7 +1115,7 @@ export default {
 					}
 
 					transformOptions.cf.image.draw = [drawObj];
-					logInfo('Watermark overlay configured', {
+					logInfo('Image watermark overlay configured', {
 						gravity: grav,
 						width: overlayWidthPx,
 						opacity,
@@ -1076,7 +1183,7 @@ export default {
 				const duration = Date.now() - startTime;
 				logInfo('Request complete', {
 					duration: `${duration}ms`,
-					hasWatermark: !!watermarkKey,
+					watermarkType,
 					hasMetadata,
 					finalSize: outBuf.byteLength,
 				});
