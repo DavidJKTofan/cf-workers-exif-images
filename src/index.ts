@@ -1015,6 +1015,8 @@ export default {
 								key: watermarkKey,
 								type: wmCt,
 							});
+						} else {
+							logInfo('No image watermark file/URL provided');
 						}
 					} catch (err: any) {
 						logError('Watermark processing failed', {
@@ -1023,8 +1025,10 @@ export default {
 						});
 						return okJson({ error: 'Failed to process watermark' }, 400);
 					}
+				} else if (watermarkType === 'text') {
+					logInfo('Text watermark selected, will generate data URL later');
 				} else {
-					logInfo('No image watermark provided');
+					logInfo('No watermark selected');
 				}
 
 				// Calculate overlay width (for image watermarks only)
