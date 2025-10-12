@@ -141,9 +141,11 @@ function generateTextSvg(
 	const height = Math.ceil(size * 1.5); // Give some vertical padding
 	const width = Math.max(estimatedWidth, size * 2); // Minimum width
 
-	// Create SVG with text element
+	// Add semi-transparent background for better visibility
+	// This helps ensure the text is readable against any background
 	const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+  <rect width="100%" height="100%" fill="black" opacity="0.5"/>
   <text 
     x="50%" 
     y="50%" 
@@ -893,7 +895,7 @@ export default {
 					hasText: !!(wmText && wmText.trim().length > 0),
 				});
 
-				// Generate SVG for text watermark
+				// Generate SVG for text watermark and convert to PNG
 				if (watermarkType === 'text') {
 					try {
 						logInfo('Generating SVG from text watermark', {
@@ -916,20 +918,57 @@ export default {
 
 						const svgBuffer = encoder.encode(svgContent);
 						const svgHash = await hashBufferHex(toArrayBuffer(svgBuffer));
-						textSvgKey = `text-wm-${svgHash}.svg`;
+						const svgKey = `text-wm-svg-${svgHash}.svg`;
 
 						logInfo('Generated SVG watermark', {
-							key: textSvgKey,
+							key: svgKey,
 							size: svgBuffer.length,
 							textLength: wmText.trim().length,
 						});
 
 						// Store SVG to R2
-						await putToR2(env, textSvgKey, toArrayBuffer(svgBuffer), 'image/svg+xml');
+						await putToR2(env, svgKey, toArrayBuffer(svgBuffer), 'image/svg+xml');
+						logInfo('Text SVG stored to R2', { key: svgKey });
 
-						logInfo('Text SVG watermark stored to R2', { key: textSvgKey });
+						// Convert SVG to PNG using Cloudflare Image Resizing
+						// This is necessary because draw overlays don't support SVG
+						const svgR2Url = `${origin}/r2/${encodeURIComponent(svgKey)}`;
+
+						logInfo('Converting SVG to PNG via image transform', { svgUrl: svgR2Url });
+
+						const pngResponse = await fetch(svgR2Url, {
+							cf: {
+								image: {
+									format: 'png',
+									quality: 100,
+								},
+							},
+							headers: { 'User-Agent': USER_AGENT },
+						});
+
+						if (!pngResponse.ok) {
+							logError('Failed to convert SVG to PNG', {
+								status: pngResponse.status,
+								statusText: pngResponse.statusText,
+							});
+							return okJson({ error: 'Failed to convert text watermark to PNG' }, 500);
+						}
+
+						const pngBuffer = await pngResponse.arrayBuffer();
+						const pngHash = await hashBufferHex(pngBuffer);
+						textSvgKey = `text-wm-${pngHash}.png`;
+
+						logInfo('Converted SVG to PNG', {
+							key: textSvgKey,
+							size: pngBuffer.byteLength,
+						});
+
+						// Store PNG to R2
+						await putToR2(env, textSvgKey, pngBuffer, 'image/png');
+
+						logInfo('Text PNG watermark stored to R2', { key: textSvgKey });
 					} catch (err: any) {
-						logError('Failed to generate text watermark SVG', {
+						logError('Failed to generate text watermark', {
 							error: err.message || String(err),
 							stack: err.stack,
 						});
@@ -1055,8 +1094,8 @@ export default {
 				opacity = Math.max(0, Math.min(1, opacity));
 
 				// Build transform request
-				// IMPORTANT: Cloudflare Image Transform requires publicly accessible URLs for image overlays
-				// Text overlays work directly without external URLs
+				// Text watermarks are converted to SVG images and stored in R2
+				// Then used like regular image watermarks
 
 				const origin = new URL(request.url).origin;
 				const mainR2Url = `${origin}/r2/${encodeURIComponent(mainKey)}`;
@@ -1067,27 +1106,27 @@ export default {
 				};
 
 				// Add watermark overlay based on type
-				if (watermarkType === 'text' && wmText) {
-					// Text watermark using Cloudflare's text overlay
+				if (watermarkType === 'text' && textSvgKey) {
+					// Text watermark (converted to SVG image)
+					const textWmUrl = `${origin}/r2/${encodeURIComponent(textSvgKey)}`;
 					const grav = (wmGravity || 'center').toString().toLowerCase();
-					const wmMarginDefault = 16; // Larger margin for text
+					const wmMarginDefault = 16;
 					const margin = Math.max(wmMarginDefault, Math.round((mainDims?.w || 200) * 0.03));
 
-					// Parse text size
-					let textSize = parseInt(wmTextSize, 10);
-					if (isNaN(textSize) || textSize <= 0) textSize = 48;
-					if (textSize > 500) textSize = 500; // Cap at 500px
-
 					const drawObj: any = {
-						text: wmText.trim(),
-						size: textSize,
-						color: wmTextColor || 'white',
-						font: wmTextFont || 'sans-serif',
-						weight: wmTextWeight || 'bold',
+						url: textWmUrl,
 						opacity: opacity,
+						fit: 'contain',
 					};
 
-					// Map gravity to positioning for text
+					// Optionally set width if main image dimensions are known
+					if (mainDims?.w) {
+						// Text watermarks typically use 30-50% of image width
+						const textWmWidth = Math.round(mainDims.w * 0.4);
+						drawObj.width = textWmWidth;
+					}
+
+					// Map gravity to positioning
 					switch (grav) {
 						case 'northwest':
 						case 'top-left':
@@ -1132,13 +1171,13 @@ export default {
 					}
 
 					transformOptions.cf.image.draw = [drawObj];
-					logInfo('Text watermark configured', {
+					logInfo('Text watermark (PNG) configured', {
 						text: wmText.trim(),
 						gravity: grav,
-						size: textSize,
+						pngKey: textSvgKey,
+						url: textWmUrl,
+						size: wmTextSize,
 						color: wmTextColor,
-						font: wmTextFont,
-						weight: wmTextWeight,
 						opacity,
 					});
 				} else if (watermarkType === 'image' && watermarkKey) {
