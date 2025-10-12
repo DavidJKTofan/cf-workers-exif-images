@@ -114,9 +114,9 @@ function toArrayBuffer(u: Uint8Array): ArrayBuffer {
 	return ArrayBuffer.prototype.slice.call(u.buffer, u.byteOffset, u.byteOffset + u.byteLength) as ArrayBuffer;
 }
 
-/* ---------- Text to SVG watermark generator ---------- */
+/* ---------- Text to PNG watermark generator using data URL ---------- */
 
-function generateTextSvg(
+function generateTextDataUrl(
 	text: string,
 	options: {
 		size?: number;
@@ -130,22 +130,20 @@ function generateTextSvg(
 	const font = options.font || 'sans-serif';
 	const weight = options.weight || 'bold';
 
-	// Escape XML special characters
+	// Estimate dimensions
+	const estimatedWidth = Math.ceil(size * 0.6 * text.length);
+	const padding = Math.ceil(size * 0.5);
+	const width = Math.max(estimatedWidth + padding * 2, size * 3);
+	const height = Math.ceil(size * 2);
+
+	// Create SVG with semi-transparent background
 	const escapeXml = (s: string) =>
 		s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
 
 	const escapedText = escapeXml(text);
 
-	// Estimate text width (rough approximation: 0.6 * fontSize * characterCount)
-	const estimatedWidth = Math.ceil(size * 0.6 * text.length);
-	const height = Math.ceil(size * 1.5); // Give some vertical padding
-	const width = Math.max(estimatedWidth, size * 2); // Minimum width
-
-	// Add semi-transparent background for better visibility
-	// This helps ensure the text is readable against any background
-	const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-  <rect width="100%" height="100%" fill="black" opacity="0.5"/>
+	const svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+  <rect width="100%" height="100%" fill="rgba(0,0,0,0.6)" rx="8"/>
   <text 
     x="50%" 
     y="50%" 
@@ -154,10 +152,13 @@ function generateTextSvg(
     font-weight="${weight}" 
     fill="${escapeXml(color)}" 
     text-anchor="middle" 
-    dominant-baseline="middle">${escapedText}</text>
+    dominant-baseline="middle"
+    style="text-shadow: 2px 2px 4px rgba(0,0,0,0.8);">${escapedText}</text>
 </svg>`;
 
-	return svg;
+	// Convert to data URL
+	const base64 = btoa(unescape(encodeURIComponent(svg)));
+	return `data:image/svg+xml;base64,${base64}`;
 }
 
 /* ---------- SSRF Protection ---------- */
@@ -896,10 +897,10 @@ export default {
 					hasText: !!(wmText && wmText.trim().length > 0),
 				});
 
-				// Generate SVG for text watermark and convert to PNG
+				// Generate data URL for text watermark (SVG embedded as data URL)
 				if (watermarkType === 'text') {
 					try {
-						logInfo('Generating SVG from text watermark', {
+						logInfo('Generating text watermark as data URL', {
 							text: wmText.trim(),
 							size: wmTextSize,
 							color: wmTextColor,
@@ -910,64 +911,21 @@ export default {
 						const textSize = parseInt(wmTextSize, 10);
 						const validatedSize = isNaN(textSize) ? 48 : Math.min(Math.max(textSize, 12), 500);
 
-						const svgContent = generateTextSvg(wmText.trim(), {
+						// Generate SVG data URL directly
+						const dataUrl = generateTextDataUrl(wmText.trim(), {
 							size: validatedSize,
 							color: wmTextColor,
 							font: wmTextFont,
 							weight: wmTextWeight,
 						});
 
-						const svgBuffer = encoder.encode(svgContent);
-						const svgHash = await hashBufferHex(toArrayBuffer(svgBuffer));
-						const svgKey = `text-wm-svg-${svgHash}.svg`;
+						// Use the data URL directly - no need to store in R2
+						textSvgKey = dataUrl;
 
-						logInfo('Generated SVG watermark', {
-							key: svgKey,
-							size: svgBuffer.length,
+						logInfo('Text watermark data URL generated', {
+							urlLength: dataUrl.length,
 							textLength: wmText.trim().length,
 						});
-
-						// Store SVG to R2
-						await putToR2(env, svgKey, toArrayBuffer(svgBuffer), 'image/svg+xml');
-						logInfo('Text SVG stored to R2', { key: svgKey });
-
-						// Convert SVG to PNG using Cloudflare Image Resizing
-						// This is necessary because draw overlays don't support SVG
-						const svgR2Url = `${requestOrigin}/r2/${encodeURIComponent(svgKey)}`;
-
-						logInfo('Converting SVG to PNG via image transform', { svgUrl: svgR2Url });
-
-						const pngResponse = await fetch(svgR2Url, {
-							cf: {
-								image: {
-									format: 'png',
-									quality: 100,
-								},
-							},
-							headers: { 'User-Agent': USER_AGENT },
-						});
-
-						if (!pngResponse.ok) {
-							logError('Failed to convert SVG to PNG', {
-								status: pngResponse.status,
-								statusText: pngResponse.statusText,
-							});
-							return okJson({ error: 'Failed to convert text watermark to PNG' }, 500);
-						}
-
-						const pngBuffer = await pngResponse.arrayBuffer();
-						const pngHash = await hashBufferHex(pngBuffer);
-						textSvgKey = `text-wm-${pngHash}.png`;
-
-						logInfo('Converted SVG to PNG', {
-							key: textSvgKey,
-							size: pngBuffer.byteLength,
-						});
-
-						// Store PNG to R2
-						await putToR2(env, textSvgKey, pngBuffer, 'image/png');
-
-						logInfo('Text PNG watermark stored to R2', { key: textSvgKey });
 					} catch (err: any) {
 						logError('Failed to generate text watermark', {
 							error: err.message || String(err),
