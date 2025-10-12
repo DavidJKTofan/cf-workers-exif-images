@@ -716,6 +716,7 @@ export default {
 		};
 
 		const url = new URL(request.url);
+		const requestOrigin = url.origin;
 
 		try {
 			// Serve R2 via /r2/<key>
@@ -932,7 +933,7 @@ export default {
 
 						// Convert SVG to PNG using Cloudflare Image Resizing
 						// This is necessary because draw overlays don't support SVG
-						const svgR2Url = `${origin}/r2/${encodeURIComponent(svgKey)}`;
+						const svgR2Url = `${requestOrigin}/r2/${encodeURIComponent(svgKey)}`;
 
 						logInfo('Converting SVG to PNG via image transform', { svgUrl: svgR2Url });
 
