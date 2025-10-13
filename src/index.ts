@@ -17,7 +17,7 @@
  * - R2 binding in wrangler.toml: binding = "IMAGES_BUCKET"
  */
 
-const USER_AGENT = `Cloudflare-Image-Protector/1.0 (+https://example.com)`;
+const USER_AGENT = `Cloudflare-Workers-Image-Protector/1.0 (+https://exif.automatic-demo.com)`;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
@@ -723,7 +723,9 @@ export default {
 				const wmOpacityRaw = (form.get('wm_opacity') as string) || '60';
 				const wmGravity = (form.get('wm_gravity') as string) || 'center';
 
-				logInfo('Parsed watermark parameters', {
+				logInfo('Parsed parameters', {
+					hasMainFile: !!(mainFile && mainFile.size > 0),
+					hasMainUrl: !!(mainUrl && mainUrl.trim()),
 					hasWmFile: !!(wmFile && wmFile.size > 0),
 					hasWmUrl: !!(wmUrl && wmUrl.trim()),
 				});
@@ -822,26 +824,22 @@ export default {
 
 				logInfo('Main image processed', { dims: mainDims });
 
-				// Determine watermark type (file or URL only)
-				let watermarkType: 'none' | 'image' = 'none';
+				// Check if watermark is provided
+				const hasWatermark = (wmFile && wmFile.size > 0) || (wmUrl && wmUrl.trim().length > 0);
 
-				if ((wmFile && wmFile.size > 0) || (wmUrl && wmUrl.trim().length > 0)) {
-					watermarkType = 'image';
-				}
-
-				logInfo('Watermark type determined', {
-					type: watermarkType,
+				logInfo('Watermark check', {
+					hasWatermark,
 					hasFile: !!(wmFile && wmFile.size > 0),
 					hasUrl: !!(wmUrl && wmUrl.trim().length > 0),
 				});
 
-				// Load image watermark (if type is 'image')
+				// Load image watermark
 				let watermarkKey: string | null = null;
 				let wmBuf: ArrayBuffer | null = null;
 				let wmCt: string | null = null;
 				let wmDims: { w: number; h: number } | null = null;
 
-				if (watermarkType === 'image') {
+				if (hasWatermark) {
 					try {
 						logInfo('Processing watermark', {
 							hasFile: !!(wmFile && wmFile.size > 0),
@@ -916,7 +914,7 @@ export default {
 								type: wmCt,
 							});
 						} else {
-							logInfo('No image watermark file/URL provided');
+							logInfo('No watermark file/URL provided');
 						}
 					} catch (err: any) {
 						logError('Watermark processing failed', {
@@ -929,45 +927,40 @@ export default {
 					logInfo('No watermark selected');
 				}
 
-				// Calculate overlay width (for image watermarks only)
-				let overlayWidthPx: number | undefined = undefined;
-				if (watermarkType === 'image') {
-					overlayWidthPx = parseSizeToPixels(wmSizeRaw, mainDims?.w);
-					if (!overlayWidthPx && mainDims?.w) {
-						overlayWidthPx = Math.max(1, Math.round(mainDims.w * 0.2));
-					}
+				// Calculate overlay width (percent or px)
+				let overlayWidthPx = parseSizeToPixels(wmSizeRaw, mainDims?.w);
+				if (!overlayWidthPx && mainDims?.w) {
+					overlayWidthPx = Math.max(1, Math.round(mainDims.w * 0.2));
+				}
 
-					// Clamp to policy - avoid covering entire image
-					if (mainDims?.w && overlayWidthPx) {
-						const maxAllowed = Math.max(1, Math.round(mainDims.w * CONFIG.MAX_WM_RATIO));
-						if (overlayWidthPx >= mainDims.w) {
-							overlayWidthPx = maxAllowed;
-						} else if (overlayWidthPx > maxAllowed) {
-							overlayWidthPx = maxAllowed;
-						}
+				// Clamp to policy - avoid covering entire image
+				if (mainDims?.w && overlayWidthPx) {
+					const maxAllowed = Math.max(1, Math.round(mainDims.w * CONFIG.MAX_WM_RATIO));
+					if (overlayWidthPx >= mainDims.w) {
+						overlayWidthPx = maxAllowed;
+					} else if (overlayWidthPx > maxAllowed) {
+						overlayWidthPx = maxAllowed;
 					}
 				}
 
-				// Normalize opacity (0..1)
+				// Opacity normalization (0..1)
 				let opacity = parseFloat(wmOpacityRaw);
 				if (Number.isNaN(opacity)) opacity = 0.6;
 				if (opacity > 1) opacity = Math.min(1, opacity / 100);
-				opacity = Math.max(0, Math.min(1, opacity));
 
 				// Build transform request
-				const origin = new URL(request.url).origin;
-				const mainR2Url = `${origin}/r2/${encodeURIComponent(mainKey)}`;
+				const mainR2Url = `${requestOrigin}/r2/${encodeURIComponent(mainKey)}`;
 
 				const transformOptions: any = {
 					cf: { image: {} },
 					headers: { 'User-Agent': USER_AGENT },
 				};
 
-				// Add watermark overlay based on type
-				if (watermarkType === 'image' && watermarkKey) {
+				// Add watermark overlay if provided
+				if (watermarkKey) {
 					// Image watermark overlay
 					const useOriginalWmUrl = wmUrl && wmUrl.trim().length > 0;
-					const finalWmUrl = useOriginalWmUrl ? wmUrl.trim() : `${origin}/r2/${encodeURIComponent(watermarkKey)}`;
+					const finalWmUrl = useOriginalWmUrl ? wmUrl.trim() : `${requestOrigin}/r2/${encodeURIComponent(watermarkKey)}`;
 
 					const wmMarginDefault = 8;
 					const drawObj: any = {
@@ -1090,14 +1083,25 @@ export default {
 
 				// Return final image
 				const headers = new Headers({ 'Content-Type': outCt });
-				headers.set('Content-Disposition', `inline; filename="protected-${mainKey}"`);
-				headers.set('Cache-Control', 'public, max-age=3600');
+
+				// Generate friendly filename
+				const timestamp = new Date().toISOString().split('T')[0].replace(/-/g, '');
+				const extension = extFromContentType(outCt);
+				const filename = `protected-${timestamp}-${mainHash.substring(0, 8)}.${extension}`;
+
+				headers.set('Content-Disposition', `inline; filename="${filename}"`);
+				headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+				headers.set('X-Content-Type-Options', 'nosniff');
+
+				logInfo('responding with protected image', {
+					filename,
+					watermarkApplied: !!watermarkKey,
+					metadataEmbedded: hasMetadata,
+				});
 
 				const duration = Date.now() - startTime;
 				logInfo('Request complete', {
 					duration: `${duration}ms`,
-					watermarkType,
-					hasMetadata,
 					finalSize: outBuf.byteLength,
 				});
 
