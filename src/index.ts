@@ -1,23 +1,29 @@
 /**
  * src/index.ts
  *
- * Cloudflare Workers Image Protector - Production-Ready
+ * Full Cloudflare Workers TypeScript worker – copy-paste.
  *
- * Improvements:
- * - SSRF protection (blocks private IPs, localhost, metadata endpoints)
- * - File size validation (configurable limits)
- * - Magic number verification for image formats
- * - Request timeouts on external fetches
- * - Sanitized error messages (no internal detail leakage)
- * - Structured logging with correlation IDs
- * - Performance metrics and timing
- * - R2 caching strategy
- * - Rate limiting preparation
+ * Features:
+ * - Accept main image (file upload or public URL). When metadata is provided, main must be JPEG.
+ * - Optional watermark (file or public URL). Watermark is resized/clamped to avoid covering main image.
+ * - Uses Cloudflare Image Transform `cf.image.draw` to overlay watermark – placement via top/left/bottom/right.
+ * - Embeds EXIF (multiple 0th IFD ASCII tags) into JPEG outputs (ImageDescription, Artist, Copyright).
+ * - Inserts PNG tEXt chunks or SVG <metadata> when appropriate.
+ * - Deterministic R2 keys via Web Crypto SHA-256.
+ * - Recognizable User-Agent on external fetches and transform fetches.
+ * - No third-party packages.
+ *
+ * Requirements:
+ * - R2 binding in wrangler.toml: binding = "IMAGES_BUCKET"
  */
 
 const USER_AGENT = `Cloudflare-Image-Protector/1.0 (+https://example.com)`;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
+
+interface Env {
+	IMAGES_BUCKET: R2Bucket;
+}
 
 // Configuration
 const CONFIG = {
@@ -27,10 +33,6 @@ const CONFIG = {
 	FETCH_TIMEOUT: 15000, // 15 seconds
 	MAX_WM_RATIO: 0.25, // watermark max 25% of main width
 };
-
-interface Env {
-	IMAGES_BUCKET: R2Bucket;
-}
 
 interface LogContext {
 	requestId: string;
@@ -112,53 +114,6 @@ function readUint32BE(u8: Uint8Array, offset: number) {
 
 function toArrayBuffer(u: Uint8Array): ArrayBuffer {
 	return ArrayBuffer.prototype.slice.call(u.buffer, u.byteOffset, u.byteOffset + u.byteLength) as ArrayBuffer;
-}
-
-/* ---------- Text to PNG watermark generator using data URL ---------- */
-
-function generateTextDataUrl(
-	text: string,
-	options: {
-		size?: number;
-		color?: string;
-		font?: string;
-		weight?: string;
-	}
-): string {
-	const size = options.size || 48;
-	const color = options.color || '#ffffff';
-	const font = options.font || 'sans-serif';
-	const weight = options.weight || 'bold';
-
-	// Estimate dimensions
-	const estimatedWidth = Math.ceil(size * 0.6 * text.length);
-	const padding = Math.ceil(size * 0.5);
-	const width = Math.max(estimatedWidth + padding * 2, size * 3);
-	const height = Math.ceil(size * 2);
-
-	// Create SVG with semi-transparent background
-	const escapeXml = (s: string) =>
-		s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
-
-	const escapedText = escapeXml(text);
-
-	const svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-  <rect width="100%" height="100%" fill="rgba(0,0,0,0.6)" rx="8"/>
-  <text 
-    x="50%" 
-    y="50%" 
-    font-family="${escapeXml(font)}" 
-    font-size="${size}" 
-    font-weight="${weight}" 
-    fill="${escapeXml(color)}" 
-    text-anchor="middle" 
-    dominant-baseline="middle"
-    style="text-shadow: 2px 2px 4px rgba(0,0,0,0.8);">${escapedText}</text>
-</svg>`;
-
-	// Convert to data URL
-	const base64 = btoa(unescape(encodeURIComponent(svg)));
-	return `data:image/svg+xml;base64,${base64}`;
 }
 
 /* ---------- SSRF Protection ---------- */
@@ -445,7 +400,7 @@ async function fetchResource(urlStr: string, label: string) {
 	}
 }
 
-/* ---------- EXIF APP1 builder (multiple 0th IFD ASCII tags) ---------- */
+/* ---------- EXIF APP1 builder (multiple 0th IFD ASCII entries) ---------- */
 
 function buildExifApp1PayloadFromMetadata(metadata: Record<string, string>): Uint8Array {
 	function asBytes(s: string) {
@@ -763,27 +718,14 @@ export default {
 				const mainUrl = (form.get('main_url') as string) || '';
 				const wmFile = form.get('watermark_file') as File | null;
 				const wmUrl = (form.get('watermark_url') as string) || '';
-				const wmText = (form.get('watermark_text') as string) || '';
 				const rawMeta = (form.get('metadata_json') as string) || null;
 				const wmSizeRaw = (form.get('wm_size') as string) || '20p';
 				const wmOpacityRaw = (form.get('wm_opacity') as string) || '60';
 				const wmGravity = (form.get('wm_gravity') as string) || 'center';
 
-				// Text watermark specific options
-				const wmTextColor = (form.get('wm_text_color') as string) || 'white';
-				const wmTextSize = (form.get('wm_text_size') as string) || '48';
-				const wmTextFont = (form.get('wm_text_font') as string) || 'sans-serif';
-				const wmTextWeight = (form.get('wm_text_weight') as string) || 'bold';
-
 				logInfo('Parsed watermark parameters', {
 					hasWmFile: !!(wmFile && wmFile.size > 0),
 					hasWmUrl: !!(wmUrl && wmUrl.trim()),
-					hasWmText: !!(wmText && wmText.trim()),
-					wmText: wmText || '(empty)',
-					wmTextSize,
-					wmTextColor,
-					wmTextFont,
-					wmTextWeight,
 				});
 
 				// Validate metadata size
@@ -880,13 +822,10 @@ export default {
 
 				logInfo('Main image processed', { dims: mainDims });
 
-				// Determine watermark type (file, URL, or text)
-				let watermarkType: 'none' | 'image' | 'text' = 'none';
-				let textSvgKey: string | null = null;
+				// Determine watermark type (file or URL only)
+				let watermarkType: 'none' | 'image' = 'none';
 
-				if (wmText && wmText.trim().length > 0) {
-					watermarkType = 'text';
-				} else if ((wmFile && wmFile.size > 0) || (wmUrl && wmUrl.trim().length > 0)) {
+				if ((wmFile && wmFile.size > 0) || (wmUrl && wmUrl.trim().length > 0)) {
 					watermarkType = 'image';
 				}
 
@@ -894,46 +833,7 @@ export default {
 					type: watermarkType,
 					hasFile: !!(wmFile && wmFile.size > 0),
 					hasUrl: !!(wmUrl && wmUrl.trim().length > 0),
-					hasText: !!(wmText && wmText.trim().length > 0),
 				});
-
-				// Generate data URL for text watermark (SVG embedded as data URL)
-				if (watermarkType === 'text') {
-					try {
-						logInfo('Generating text watermark as data URL', {
-							text: wmText.trim(),
-							size: wmTextSize,
-							color: wmTextColor,
-							font: wmTextFont,
-							weight: wmTextWeight,
-						});
-
-						const textSize = parseInt(wmTextSize, 10);
-						const validatedSize = isNaN(textSize) ? 48 : Math.min(Math.max(textSize, 12), 500);
-
-						// Generate SVG data URL directly
-						const dataUrl = generateTextDataUrl(wmText.trim(), {
-							size: validatedSize,
-							color: wmTextColor,
-							font: wmTextFont,
-							weight: wmTextWeight,
-						});
-
-						// Use the data URL directly - no need to store in R2
-						textSvgKey = dataUrl;
-
-						logInfo('Text watermark data URL generated', {
-							urlLength: dataUrl.length,
-							textLength: wmText.trim().length,
-						});
-					} catch (err: any) {
-						logError('Failed to generate text watermark', {
-							error: err.message || String(err),
-							stack: err.stack,
-						});
-						return okJson({ error: 'Failed to generate text watermark' }, 500);
-					}
-				}
 
 				// Load image watermark (if type is 'image')
 				let watermarkKey: string | null = null;
@@ -1025,8 +925,6 @@ export default {
 						});
 						return okJson({ error: 'Failed to process watermark' }, 400);
 					}
-				} else if (watermarkType === 'text') {
-					logInfo('Text watermark selected, will generate data URL later');
 				} else {
 					logInfo('No watermark selected');
 				}
@@ -1057,9 +955,6 @@ export default {
 				opacity = Math.max(0, Math.min(1, opacity));
 
 				// Build transform request
-				// Text watermarks are converted to SVG images and stored in R2
-				// Then used like regular image watermarks
-
 				const origin = new URL(request.url).origin;
 				const mainR2Url = `${origin}/r2/${encodeURIComponent(mainKey)}`;
 
@@ -1069,81 +964,7 @@ export default {
 				};
 
 				// Add watermark overlay based on type
-				if (watermarkType === 'text' && textSvgKey) {
-					// Text watermark (converted to SVG image)
-					const textWmUrl = `${origin}/r2/${encodeURIComponent(textSvgKey)}`;
-					const grav = (wmGravity || 'center').toString().toLowerCase();
-					const wmMarginDefault = 16;
-					const margin = Math.max(wmMarginDefault, Math.round((mainDims?.w || 200) * 0.03));
-
-					const drawObj: any = {
-						url: textWmUrl,
-						opacity: opacity,
-						fit: 'contain',
-					};
-
-					// Optionally set width if main image dimensions are known
-					if (mainDims?.w) {
-						// Text watermarks typically use 30-50% of image width
-						const textWmWidth = Math.round(mainDims.w * 0.4);
-						drawObj.width = textWmWidth;
-					}
-
-					// Map gravity to positioning
-					switch (grav) {
-						case 'northwest':
-						case 'top-left':
-							drawObj.top = margin;
-							drawObj.left = margin;
-							break;
-						case 'northeast':
-						case 'top-right':
-							drawObj.top = margin;
-							drawObj.right = margin;
-							break;
-						case 'southwest':
-						case 'bottom-left':
-							drawObj.bottom = margin;
-							drawObj.left = margin;
-							break;
-						case 'southeast':
-						case 'bottom-right':
-							drawObj.bottom = margin;
-							drawObj.right = margin;
-							break;
-						case 'north':
-						case 'top':
-							drawObj.top = margin;
-							break;
-						case 'south':
-						case 'bottom':
-							drawObj.bottom = margin;
-							break;
-						case 'west':
-						case 'left':
-							drawObj.left = margin;
-							break;
-						case 'east':
-						case 'right':
-							drawObj.right = margin;
-							break;
-						case 'center':
-						default:
-							// Centered - no offsets
-							break;
-					}
-
-					transformOptions.cf.image.draw = [drawObj];
-					logInfo('Text watermark (PNG) configured', {
-						text: wmText.trim(),
-						gravity: grav,
-						pngKey: textSvgKey,
-						url: textWmUrl,
-						size: wmTextSize,
-						color: wmTextColor,
-						opacity,
-					});
-				} else if (watermarkType === 'image' && watermarkKey) {
+				if (watermarkType === 'image' && watermarkKey) {
 					// Image watermark overlay
 					const useOriginalWmUrl = wmUrl && wmUrl.trim().length > 0;
 					const finalWmUrl = useOriginalWmUrl ? wmUrl.trim() : `${origin}/r2/${encodeURIComponent(watermarkKey)}`;
