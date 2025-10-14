@@ -15,7 +15,11 @@ Minimal Cloudflare Workers project that embeds EXIF metadata into JPEGs and opti
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/DavidJKTofan/cf-workers-exif-images)
 
-## API
+## Screenshots
+
+![Image Protector View](public/images/image-protector.png)
+
+## API Usage
 
 - `POST /process` — multipart/form-data or fields:
 
@@ -27,6 +31,24 @@ Minimal Cloudflare Workers project that embeds EXIF metadata into JPEGs and opti
   - `wm_gravity` — gravity (e.g. `center`, `northwest`).
 
 Response: transformed image (inline). Errors returned as JSON.
+
+### API Example
+
+```bash
+# Add centered watermark to image
+curl -X POST https://exif.automatic-demo.com/process \
+  -F "main_file=@image.png" \
+  -F "watermark_url=https://exif.automatic-demo.com/favicon.png"
+
+# Add parameters
+curl -X POST https://exif.automatic-demo.com/process \
+  -F "main_file=@image.png" \
+  -F "watermark_url=https://exif.automatic-demo.com/favicon.png" \
+  -F "wm_size=25p" \
+  -F "wm_opacity=80" \
+  -F "wm_gravity=bottom-right" \
+  --output protected-image.png
+```
 
 ## Notes
 

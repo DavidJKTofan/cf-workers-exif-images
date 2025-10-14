@@ -26,6 +26,7 @@
 			.page {
 				min-height: 100%;
 				display: flex;
+				flex-direction: column;
 				align-items: center;
 				justify-content: center;
 				padding: 28px;
@@ -230,6 +231,26 @@
 				border: 1px solid #eef2ff;
 			}
 
+			.disclaimer {
+				margin-top: 20px;
+				padding: 12px;
+				background: #fef3c7;
+				border: 1px solid #fde68a;
+				border-radius: var(--radius);
+				font-size: 12px;
+				color: #92400e;
+				text-align: center;
+				line-height: 1.5;
+			}
+			.disclaimer a {
+				color: #b45309;
+				font-weight: 600;
+				text-decoration: none;
+			}
+			.disclaimer a:hover {
+				text-decoration: underline;
+			}
+
 			/* responsive */
 			@media (max-width: 720px) {
 				.grid-2,
@@ -382,6 +403,11 @@
 					<span class="small muted">Deterministic R2 keys. No third-party libraries.</span>
 					<span class="small muted">Watermark will be clamped to avoid covering the full image.</span>
 				</footer>
+
+				<div class="disclaimer">
+					<strong>Disclaimer:</strong> This is a private project for educational purposes only. For more information, visit the
+					<a href="https://github.com/DavidJKTofan/cf-workers-exif-images" target="_blank" rel="noopener noreferrer external">GitHub repository</a>.
+				</div>
 			</section>
 		</div>
 		<script>
