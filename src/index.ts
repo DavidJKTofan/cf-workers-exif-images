@@ -1,7 +1,11 @@
+
 /**
- * src/index.ts
+ * Cloudflare Workers entrypoint for EXIF Image Protector
  *
- * Full Cloudflare Workers TypeScript worker – copy-paste.
+ * - Follows Cloudflare Workers best practices for error handling, logging, and security.
+ * - All image processing and EXIF/watermark logic is preserved.
+ * - Uses strict TypeScript and explicit Env interface for bindings.
+ * - See https://developers.cloudflare.com/developer-platform/llms-full.txt for best practices reference.
  *
  * Features:
  * - Accept main image (file upload or public URL). When metadata is provided, main must be JPEG.
@@ -15,13 +19,29 @@
  *
  * Requirements:
  * - R2 binding in wrangler.toml: binding = "IMAGES_BUCKET"
+ *
+ * Best Practices:
+ * - All environment bindings are accessed via the Env interface.
+ * - All error responses are JSON with clear messages.
+ * - SSRF and input validation is enforced for all user-supplied URLs.
+ * - Static assets and R2 objects are served with immutable cache headers.
+ * - Logging is structured and includes requestId for traceability.
  */
 
 const USER_AGENT = `Cloudflare-Workers-Image-Protector/1.0 (+https://exif.automatic-demo.com)`;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
+
+/**
+ * Cloudflare Worker environment bindings.
+ * Add new bindings here and document in wrangler.jsonc.
+ */
 interface Env {
+	/**
+	 * R2 bucket for storing and retrieving images.
+	 * @binding IMAGES_BUCKET
+	 */
 	IMAGES_BUCKET: R2Bucket;
 }
 
@@ -101,6 +121,11 @@ function extFromContentType(ct: string | null): string {
 	return 'bin';
 }
 
+
+/**
+ * Return a JSON response with proper content-type and status.
+ * All error responses should use this for consistency.
+ */
 function okJson(body: any, status = 200) {
 	return new Response(JSON.stringify(body), {
 		status,
@@ -675,25 +700,20 @@ export default {
 		const requestOrigin = url.origin;
 
 		try {
-			// Serve R2 via /r2/<key>
+			// Serve R2 via /r2/<key> (static asset best practice: immutable cache)
 			if (request.method === 'GET' && url.pathname.startsWith('/r2/')) {
 				const key = decodeURIComponent(url.pathname.replace('/r2/', ''));
-
 				if (!key || key.includes('..')) {
-					return new Response('Invalid key', { status: 400 });
+					return okJson({ error: 'Invalid key' }, 400);
 				}
-
 				const obj = await env.IMAGES_BUCKET.get(key);
-				if (!obj) return new Response('Not found', { status: 404 });
-
+				if (!obj) return okJson({ error: 'Not found' }, 404);
 				const headers: Record<string, string> = {
 					'Cache-Control': 'public, max-age=31536000, immutable',
 				};
-
 				if (obj.httpMetadata && obj.httpMetadata.contentType) {
 					headers['content-type'] = obj.httpMetadata.contentType;
 				}
-
 				return new Response(obj.body, { status: 200, headers });
 			}
 
@@ -1134,9 +1154,10 @@ export default {
 			const duration = Date.now() - startTime;
 			logError('Unhandled error', { error, duration: `${duration}ms` });
 
+			// Always return JSON error with requestId for traceability
 			return okJson(
 				{
-					error: 'Internal server error',
+					error: 'Internal error',
 					requestId: globalLogContext.requestId,
 				},
 				500
