@@ -189,8 +189,8 @@ function verifyImageFormat(buffer: ArrayBuffer): { valid: boolean; type: string;
 		u8.length >= 12 &&
 		u8[0] === 0x52 &&
 		u8[1] === 0x49 &&
-		u8[2] === 0x46 &&
-		u8[3] === 0x46 && // RIFF
+		u8[2] === 0x46 && // RIFF
+		u8[3] === 0x46 &&
 		u8[8] === 0x57 &&
 		u8[9] === 0x45 &&
 		u8[10] === 0x42 &&
@@ -226,7 +226,6 @@ function verifyImageFormat(buffer: ArrayBuffer): { valid: boolean; type: string;
 		return { valid: true, type: 'image/bmp' };
 	}
 
-	// TIFF magic numbers: II (little-endian) or MM (big-endian)
 	if (
 		u8.length >= 4 &&
 		((u8[0] === 0x49 && u8[1] === 0x49 && u8[2] === 0x2a && u8[3] === 0x00) ||
@@ -598,7 +597,6 @@ export default {
 		const requestOrigin = url.origin;
 
 		try {
-			// Serve R2 via /r2/<key> (static asset best practice: immutable cache)
 			if (request.method === 'GET' && url.pathname.startsWith('/r2/')) {
 				const key = decodeURIComponent(url.pathname.replace('/r2/', ''));
 				if (!key || key.includes('..')) {
@@ -774,20 +772,57 @@ export default {
 					}
 				}
 
-				// Calculate overlay width
-				let overlayWidthPx = parseSizeToPixels(wmSizeRaw, mainDims?.w);
-				if (!overlayWidthPx && mainDims?.w) {
+				// Calculate effective dimensions after resize constraints
+				let effectiveWidth = mainDims?.w || 0;
+				let effectiveHeight = mainDims?.h || 0;
+
+				const width = parseInt(widthRaw, 10);
+				const height = parseInt(heightRaw, 10);
+
+				if (!isNaN(width) && width > 0 && effectiveWidth > 0) {
+					if (width < effectiveWidth) {
+						// Image will be scaled down
+						const scale = width / effectiveWidth;
+						effectiveWidth = width;
+						effectiveHeight = Math.round(effectiveHeight * scale);
+						logInfo('Width constraint will scale image', { scale, newWidth: effectiveWidth, newHeight: effectiveHeight });
+					}
+				}
+
+				if (!isNaN(height) && height > 0 && effectiveHeight > 0) {
+					if (height < effectiveHeight) {
+						// Image will be scaled down further
+						const scale = height / effectiveHeight;
+						effectiveWidth = Math.round(effectiveWidth * scale);
+						effectiveHeight = height;
+						logInfo('Height constraint will scale image', { scale, newWidth: effectiveWidth, newHeight: effectiveHeight });
+					}
+				}
+
+				// Calculate overlay width based on effective dimensions (after resize)
+				let overlayWidthPx = parseSizeToPixels(wmSizeRaw, effectiveWidth > 0 ? effectiveWidth : mainDims?.w);
+				if (!overlayWidthPx && effectiveWidth > 0) {
+					overlayWidthPx = Math.max(1, Math.round(effectiveWidth * 0.2));
+				} else if (!overlayWidthPx && mainDims?.w) {
 					overlayWidthPx = Math.max(1, Math.round(mainDims.w * 0.2));
 				}
 
-				if (mainDims?.w && overlayWidthPx) {
-					const maxAllowed = Math.max(1, Math.round(mainDims.w * CONFIG.MAX_WM_RATIO));
-					if (overlayWidthPx >= mainDims.w) {
+				const refWidth = effectiveWidth > 0 ? effectiveWidth : mainDims?.w;
+				if (refWidth && overlayWidthPx) {
+					const maxAllowed = Math.max(1, Math.round(refWidth * CONFIG.MAX_WM_RATIO));
+					if (overlayWidthPx >= refWidth) {
 						overlayWidthPx = maxAllowed;
 					} else if (overlayWidthPx > maxAllowed) {
 						overlayWidthPx = maxAllowed;
 					}
 				}
+
+				logInfo('Watermark size calculated', {
+					originalWidth: mainDims?.w,
+					effectiveWidth,
+					overlayWidthPx,
+					percentage: overlayWidthPx && effectiveWidth ? ((overlayWidthPx / effectiveWidth) * 100).toFixed(1) + '%' : 'N/A',
+				});
 
 				// Opacity normalization
 				let opacity = parseFloat(wmOpacityRaw);
@@ -809,14 +844,12 @@ export default {
 					logInfo('Quality set', { quality });
 				}
 
-				const width = parseInt(widthRaw, 10);
 				if (!isNaN(width) && width > 0) {
 					transformOptions.cf.image.width = width;
 					transformOptions.cf.image.fit = 'scale-down';
 					logInfo('Width constraint set', { width });
 				}
 
-				const height = parseInt(heightRaw, 10);
 				if (!isNaN(height) && height > 0) {
 					transformOptions.cf.image.height = height;
 					if (!transformOptions.cf.image.fit) {
@@ -842,7 +875,7 @@ export default {
 					}
 
 					const grav = (wmGravity || 'center').toString().toLowerCase();
-					const margin = Math.max(wmMarginDefault, Math.round((mainDims?.w || 200) * 0.02));
+					const margin = Math.max(wmMarginDefault, Math.round((effectiveWidth || mainDims?.w || 200) * 0.02));
 
 					switch (grav) {
 						case 'northwest':
