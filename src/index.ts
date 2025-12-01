@@ -58,7 +58,6 @@ interface LogContext {
 }
 
 let globalLogContext: LogContext = { requestId: '', timestamp: 0 };
-
 function logInfo(message: string, data?: any) {
 	try {
 		console.log(
@@ -824,26 +823,28 @@ export default {
 					percentage: overlayWidthPx && effectiveWidth ? ((overlayWidthPx / effectiveWidth) * 100).toFixed(1) + '%' : 'N/A',
 				});
 
-				// Opacity normalization
+				// Normalize opacity (0-1 range)
 				let opacity = parseFloat(wmOpacityRaw);
 				if (Number.isNaN(opacity)) opacity = 0.6;
 				if (opacity > 1) opacity = Math.min(1, opacity / 100);
 
-				// Build transform request
+				// Build R2 URL for main image
 				const mainR2Url = `${requestOrigin}/r2/${encodeURIComponent(mainKey)}`;
 
+				// Configure Cloudflare Image Transform with metadata preservation
 				const transformOptions: any = {
-					cf: { image: {} },
+					cf: { image: { metadata: 'keep' } },
 					headers: { 'User-Agent': USER_AGENT },
 				};
 
-				// Add quality and dimensions
+				// Apply quality setting
 				const quality = parseInt(qualityRaw, 10);
 				if (!isNaN(quality) && quality >= 1 && quality <= 100) {
 					transformOptions.cf.image.quality = quality;
 					logInfo('Quality set', { quality });
 				}
 
+				// Apply dimension constraints
 				if (!isNaN(width) && width > 0) {
 					transformOptions.cf.image.width = width;
 					transformOptions.cf.image.fit = 'scale-down';
@@ -858,7 +859,7 @@ export default {
 					logInfo('Height constraint set', { height });
 				}
 
-				// Add watermark overlay
+				// Configure watermark overlay
 				if (watermarkKey) {
 					const useOriginalWmUrl = wmUrl && wmUrl.trim().length > 0;
 					const finalWmUrl = useOriginalWmUrl ? wmUrl.trim() : `${requestOrigin}/r2/${encodeURIComponent(watermarkKey)}`;
@@ -874,6 +875,7 @@ export default {
 						drawObj.fit = 'contain';
 					}
 
+					// Position watermark based on gravity setting
 					const grav = (wmGravity || 'center').toString().toLowerCase();
 					const margin = Math.max(wmMarginDefault, Math.round((effectiveWidth || mainDims?.w || 200) * 0.02));
 
@@ -923,21 +925,39 @@ export default {
 					logInfo('Watermark overlay configured', { gravity: grav, width: overlayWidthPx, opacity });
 				}
 
-				// Call Cloudflare image transform
+				// Pre-embed EXIF metadata before transform (transform will preserve it)
 				let transformed: Response;
+				let sourceUrl = mainR2Url;
+
+				if (mainIsJpeg && hasMetadata) {
+					try {
+						const processedBuf = insertExifIntoJpeg(mainBuf, meta);
+						logInfo('EXIF metadata embedded in source');
+
+						// Upload EXIF version to R2
+						const metaKey = `meta-${mainHash}.${mainExt}`;
+						await putToR2(env, metaKey, processedBuf, mainCt);
+						sourceUrl = `${requestOrigin}/r2/${encodeURIComponent(metaKey)}`;
+					} catch (err) {
+						logError('EXIF embedding failed, using original', err);
+					}
+				}
+
+				// Call Cloudflare Image Transform
 				try {
-					logInfo('Calling image transform', { url: mainR2Url, options: transformOptions.cf.image });
-					transformed = await fetch(mainR2Url, transformOptions);
+					logInfo('Calling image transform', { url: sourceUrl, options: transformOptions.cf.image });
+					transformed = await fetch(sourceUrl, transformOptions);
 				} catch (err) {
 					logError('Transform network failure', err);
 					return okJson({ error: 'Image transform failed' }, 500);
 				}
 
 				if (!transformed.ok) {
-					logError('Transform returned error', { status: transformed.status, statusText: transformed.statusText });
+					logError('Transform error', { status: transformed.status, statusText: transformed.statusText });
 					return okJson({ error: 'Image transform failed' }, 500);
 				}
 
+				// Read transformed image
 				let outBuf: ArrayBuffer;
 				try {
 					outBuf = await transformed.arrayBuffer();
@@ -955,13 +975,9 @@ export default {
 					compressionRatio: (mainBuf.byteLength / outBuf.byteLength).toFixed(2),
 				});
 
-				// Embed metadata only for JPEG outputs
+				// Add metadata for PNG/SVG outputs (JPEG metadata already preserved)
 				try {
-					if ((outCt.includes('jpeg') || outCt.includes('jpg')) && hasMetadata && mainIsJpeg) {
-						outBuf = insertExifIntoJpeg(outBuf, meta);
-						logInfo('EXIF metadata inserted');
-						metadataWarning = null; // Clear warning if successfully embedded
-					} else if (outCt.includes('png') && Object.keys(meta).length) {
+					if (outCt.includes('png') && Object.keys(meta).length && !mainIsJpeg) {
 						outBuf = insertPngTextChunks(outBuf, meta);
 						logInfo('PNG tEXt chunks inserted');
 					} else if (outCt.includes('svg') && Object.keys(meta).length) {
@@ -972,7 +988,7 @@ export default {
 					logError('Metadata insertion failed (non-fatal)', err);
 				}
 
-				// Return final image
+				// Build response headers
 				const headers = new Headers({ 'Content-Type': outCt });
 
 				const timestamp = new Date().toISOString().split('T')[0].replace(/-/g, '');
@@ -1000,6 +1016,7 @@ export default {
 				return new Response(outBuf, { status: 200, headers });
 			}
 
+			// Health check endpoint
 			if (request.method === 'GET') {
 				return new Response(
 					JSON.stringify({
