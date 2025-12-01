@@ -1,4 +1,3 @@
-
 /**
  * Cloudflare Workers entrypoint for EXIF Image Protector
  *
@@ -31,7 +30,6 @@
 const USER_AGENT = `Cloudflare-Workers-Image-Protector/1.0 (+https://exif.automatic-demo.com)`;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
-
 
 /**
  * Cloudflare Worker environment bindings.
@@ -121,11 +119,6 @@ function extFromContentType(ct: string | null): string {
 	return 'bin';
 }
 
-
-/**
- * Return a JSON response with proper content-type and status.
- * All error responses should use this for consistency.
- */
 function okJson(body: any, status = 200) {
 	return new Response(JSON.stringify(body), {
 		status,
@@ -141,83 +134,44 @@ function toArrayBuffer(u: Uint8Array): ArrayBuffer {
 	return ArrayBuffer.prototype.slice.call(u.buffer, u.byteOffset, u.byteOffset + u.byteLength) as ArrayBuffer;
 }
 
-/* ---------- SSRF Protection ---------- */
-
 function isPrivateIP(hostname: string): boolean {
-	// IPv4 private ranges
-	const ipv4Private = [
-		/^127\./, // localhost
-		/^10\./, // 10.0.0.0/8
-		/^172\.(1[6-9]|2[0-9]|3[01])\./, // 172.16.0.0/12
-		/^192\.168\./, // 192.168.0.0/16
-		/^169\.254\./, // link-local (AWS metadata)
-		/^0\.0\.0\.0$/, // unspecified
-	];
-
-	// IPv6 private ranges
-	const ipv6Private = [
-		/^::1$/, // localhost
-		/^fe80:/i, // link-local
-		/^fc00:/i, // unique local
-		/^fd[0-9a-f]{2}:/i, // unique local
-	];
-
+	const ipv4Private = [/^127\./, /^10\./, /^172\.(1[6-9]|2[0-9]|3[01])\./, /^192\.168\./, /^169\.254\./, /^0\.0\.0\.0$/];
+	const ipv6Private = [/^::1$/, /^fe80:/i, /^fc00:/i, /^fd[0-9a-f]{2}:/i];
 	const lower = hostname.toLowerCase();
-
 	if (lower === 'localhost') return true;
-
-	for (const pattern of ipv4Private) {
-		if (pattern.test(lower)) return true;
-	}
-
-	for (const pattern of ipv6Private) {
-		if (pattern.test(lower)) return true;
-	}
-
+	for (const pattern of ipv4Private) if (pattern.test(lower)) return true;
+	for (const pattern of ipv6Private) if (pattern.test(lower)) return true;
 	return false;
 }
 
 function validateUrl(urlStr: string): { valid: boolean; url?: URL; error?: string } {
 	try {
 		const url = new URL(urlStr);
-
 		if (!['http:', 'https:'].includes(url.protocol)) {
 			return { valid: false, error: 'Only HTTP/HTTPS protocols allowed' };
 		}
-
 		if (isPrivateIP(url.hostname)) {
 			return { valid: false, error: 'Private IP addresses not allowed' };
 		}
-
 		return { valid: true, url };
 	} catch (err) {
 		return { valid: false, error: 'Invalid URL format' };
 	}
 }
 
-/* ---------- Image Format Verification ---------- */
-
 function verifyImageFormat(buffer: ArrayBuffer): { valid: boolean; type: string; error?: string } {
 	const u8 = new Uint8Array(buffer);
-
-	logInfo('Verifying image format', {
-		bufferSize: buffer.byteLength,
-		firstBytes: Array.from(u8.slice(0, 16))
-			.map((b) => '0x' + b.toString(16).padStart(2, '0'))
-			.join(' '),
-	});
+	logInfo('Verifying image format', { bufferSize: buffer.byteLength });
 
 	if (u8.length < 8) {
 		return { valid: false, type: '', error: 'File too small to be valid image' };
 	}
 
-	// JPEG magic number: FF D8 FF
 	if (u8[0] === 0xff && u8[1] === 0xd8 && u8[2] === 0xff) {
 		logInfo('Detected format: JPEG');
 		return { valid: true, type: 'image/jpeg' };
 	}
 
-	// PNG magic number: 89 50 4E 47 0D 0A 1A 0A
 	const pngSig = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 	let isPng = true;
 	for (let i = 0; i < 8; i++) {
@@ -231,7 +185,6 @@ function verifyImageFormat(buffer: ArrayBuffer): { valid: boolean; type: string;
 		return { valid: true, type: 'image/png' };
 	}
 
-	// WebP magic number: RIFF....WEBP
 	if (
 		u8.length >= 12 &&
 		u8[0] === 0x52 &&
@@ -243,12 +196,10 @@ function verifyImageFormat(buffer: ArrayBuffer): { valid: boolean; type: string;
 		u8[10] === 0x42 &&
 		u8[11] === 0x50
 	) {
-		// WEBP
 		logInfo('Detected format: WebP');
 		return { valid: true, type: 'image/webp' };
 	}
 
-	// GIF magic number: GIF87a or GIF89a
 	if (
 		u8.length >= 6 &&
 		u8[0] === 0x47 &&
@@ -258,23 +209,18 @@ function verifyImageFormat(buffer: ArrayBuffer): { valid: boolean; type: string;
 		(u8[4] === 0x37 || u8[4] === 0x39) &&
 		u8[5] === 0x61
 	) {
-		// 87a or 89a
 		logInfo('Detected format: GIF');
 		return { valid: true, type: 'image/gif' };
 	}
 
-	// SVG (text-based format)
 	try {
 		const textStart = decoder.decode(u8.subarray(0, Math.min(500, u8.length)));
 		if (textStart.includes('<svg') || (textStart.includes('<?xml') && textStart.includes('<svg'))) {
 			logInfo('Detected format: SVG');
 			return { valid: true, type: 'image/svg+xml' };
 		}
-	} catch (e) {
-		// Not valid UTF-8, can't be SVG
-	}
+	} catch (e) {}
 
-	// BMP magic number: BM
 	if (u8.length >= 2 && u8[0] === 0x42 && u8[1] === 0x4d) {
 		logInfo('Detected format: BMP');
 		return { valid: true, type: 'image/bmp' };
@@ -290,17 +236,9 @@ function verifyImageFormat(buffer: ArrayBuffer): { valid: boolean; type: string;
 		return { valid: true, type: 'image/tiff' };
 	}
 
-	logError('Unsupported image format', {
-		bufferSize: u8.length,
-		firstBytes: Array.from(u8.slice(0, 16))
-			.map((b) => '0x' + b.toString(16).padStart(2, '0'))
-			.join(' '),
-	});
-
+	logError('Unsupported image format', { bufferSize: u8.length });
 	return { valid: false, type: '', error: 'Unsupported image format' };
 }
-
-/* ---------- Dimension parsers (PNG / JPEG) ---------- */
 
 function getPngDimensions(buffer: ArrayBuffer): { w: number; h: number } | null {
 	const u8 = new Uint8Array(buffer);
@@ -347,14 +285,10 @@ function validateDimensions(dims: { w: number; h: number } | null): boolean {
 	return dims.w > 0 && dims.h > 0 && dims.w <= CONFIG.MAX_DIMENSION && dims.h <= CONFIG.MAX_DIMENSION;
 }
 
-/* ---------- Fetch with timeout and validation ---------- */
-
 async function fetchResource(urlStr: string, label: string) {
 	const trimmed = urlStr.trim();
-
 	logInfo(`Starting fetch for ${label}`, { url: trimmed });
 
-	// Validate URL
 	const validation = validateUrl(trimmed);
 	if (!validation.valid) {
 		logError(`URL validation failed for ${label}`, { url: trimmed, reason: validation.error });
@@ -375,57 +309,31 @@ async function fetchResource(urlStr: string, label: string) {
 		});
 
 		clearTimeout(timeoutId);
+		logInfo(`Fetch response for ${label}`, { url: trimmed, status: res.status });
 
-		logInfo(`Fetch response for ${label}`, {
-			url: trimmed,
-			status: res.status,
-			statusText: res.statusText,
-			contentType: res.headers.get('content-type'),
-			contentLength: res.headers.get('content-length'),
-		});
-
-		if (!res.ok) {
-			throw new Error(`HTTP ${res.status}`);
-		}
+		if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
 		const buf = await res.arrayBuffer();
 
-		// Validate size
 		if (buf.byteLength > CONFIG.MAX_FILE_SIZE) {
-			logError(`File exceeds size limit for ${label}`, {
-				size: buf.byteLength,
-				limit: CONFIG.MAX_FILE_SIZE,
-			});
+			logError(`File exceeds size limit for ${label}`, { size: buf.byteLength });
 			throw new Error(`File exceeds maximum size of ${CONFIG.MAX_FILE_SIZE} bytes`);
 		}
 
 		const ct = res.headers.get('content-type') || 'application/octet-stream';
-
-		logInfo(`Fetch successful for ${label}`, {
-			url: trimmed,
-			bytes: buf.byteLength,
-			contentType: ct,
-		});
+		logInfo(`Fetch successful for ${label}`, { bytes: buf.byteLength, contentType: ct });
 
 		return { buffer: buf, contentType: ct, url: trimmed };
 	} catch (err: any) {
 		clearTimeout(timeoutId);
-
 		if (err.name === 'AbortError') {
-			logError(`${label} fetch timeout`, { url: trimmed, timeout: CONFIG.FETCH_TIMEOUT });
+			logError(`${label} fetch timeout`, { url: trimmed });
 			throw new Error(`${label} fetch timeout after ${CONFIG.FETCH_TIMEOUT}ms`);
 		}
-
-		logError(`${label} fetch failed`, {
-			url: trimmed,
-			error: err.message || String(err),
-			stack: err.stack,
-		});
+		logError(`${label} fetch failed`, { url: trimmed, error: err.message });
 		throw new Error(`${label} fetch failed`);
 	}
 }
-
-/* ---------- EXIF APP1 builder (multiple 0th IFD ASCII entries) ---------- */
 
 function buildExifApp1PayloadFromMetadata(metadata: Record<string, string>): Uint8Array {
 	function asBytes(s: string) {
@@ -535,8 +443,6 @@ function insertExifIntoJpeg(buffer: ArrayBuffer, metadata: Record<string, string
 	return out.buffer;
 }
 
-/* ---------- PNG tEXt insertion ---------- */
-
 function makeCrc32Table(): Uint32Array {
 	const table = new Uint32Array(256);
 	for (let i = 0; i < 256; i++) {
@@ -631,8 +537,6 @@ function insertPngTextChunks(buffer: ArrayBuffer, metadata: Record<string, strin
 	return out.buffer;
 }
 
-/* ---------- SVG metadata insertion ---------- */
-
 function escapeXmlName(name: string) {
 	return name.replace(/[^A-Za-z0-9_:.-]/g, '_');
 }
@@ -648,8 +552,6 @@ function insertSvgMetadata(svgBuffer: ArrayBuffer, metadata: Record<string, stri
 	const out = encoder.encode(txt.slice(0, pos + 1) + md + txt.slice(pos + 1));
 	return toArrayBuffer(out);
 }
-
-/* ---------- R2 helper ---------- */
 
 async function putToR2(env: Env, key: string, body: ArrayBuffer | ArrayBufferView | ReadableStream, contentType?: string) {
 	logInfo('Uploading to R2', { key, contentType });
@@ -670,8 +572,6 @@ async function putToR2(env: Env, key: string, body: ArrayBuffer | ArrayBufferVie
 	logInfo('R2 upload complete', { key });
 }
 
-/* ---------- Watermark sizing helpers ---------- */
-
 function parseSizeToPixels(sizeRaw: string | undefined, mainWidth: number | undefined): number | undefined {
 	if (!sizeRaw) return undefined;
 	const s = String(sizeRaw).trim();
@@ -685,8 +585,6 @@ function parseSizeToPixels(sizeRaw: string | undefined, mainWidth: number | unde
 		return n;
 	}
 }
-
-/* ---------- Main fetch handler ---------- */
 
 export default {
 	async fetch(request: Request, env: Env) {
@@ -711,28 +609,16 @@ export default {
 				const headers: Record<string, string> = {
 					'Cache-Control': 'public, max-age=31536000, immutable',
 				};
-				if (obj.httpMetadata && obj.httpMetadata.contentType) {
+				if (obj.httpMetadata?.contentType) {
 					headers['content-type'] = obj.httpMetadata.contentType;
 				}
 				return new Response(obj.body, { status: 200, headers });
 			}
 
-			// Process
 			if (request.method === 'POST' && url.pathname === '/process') {
 				logInfo('Processing image request', { method: 'POST', path: '/process' });
 
 				const form = await request.formData();
-
-				// Log all form entries for debugging
-				const formEntries: Record<string, any> = {};
-				for (const [key, value] of form.entries()) {
-					if (value instanceof File) {
-						formEntries[key] = `File: ${value.name} (${value.size} bytes)`;
-					} else {
-						formEntries[key] = value;
-					}
-				}
-				logInfo('Form data received', { entries: formEntries });
 
 				const mainFile = form.get('main_file') as File | null;
 				const mainUrl = (form.get('main_url') as string) || '';
@@ -742,15 +628,10 @@ export default {
 				const wmSizeRaw = (form.get('wm_size') as string) || '20p';
 				const wmOpacityRaw = (form.get('wm_opacity') as string) || '60';
 				const wmGravity = (form.get('wm_gravity') as string) || 'center';
+				const qualityRaw = (form.get('quality') as string) || '';
+				const widthRaw = (form.get('width') as string) || '';
+				const heightRaw = (form.get('height') as string) || '';
 
-				logInfo('Parsed parameters', {
-					hasMainFile: !!(mainFile && mainFile.size > 0),
-					hasMainUrl: !!(mainUrl && mainUrl.trim()),
-					hasWmFile: !!(wmFile && wmFile.size > 0),
-					hasWmUrl: !!(wmUrl && wmUrl.trim()),
-				});
-
-				// Validate metadata size
 				if (rawMeta && rawMeta.length > CONFIG.MAX_METADATA_SIZE) {
 					return okJson({ error: 'Metadata too large' }, 413);
 				}
@@ -766,15 +647,8 @@ export default {
 						logError('Invalid metadata_json', e);
 						return okJson({ error: 'Invalid metadata JSON' }, 400);
 					}
-				} else {
-					for (const [k, v] of form.entries()) {
-						if (typeof k === 'string' && k.startsWith('meta_')) {
-							meta[k.replace('meta_', '')] = String(v);
-						}
-					}
 				}
 
-				// Load main image
 				let mainBuf: ArrayBuffer;
 				let mainCt: string | null = null;
 				try {
@@ -797,7 +671,6 @@ export default {
 					return okJson({ error: 'Failed to load main image' }, 400);
 				}
 
-				// Verify image format with magic numbers
 				const formatCheck = verifyImageFormat(mainBuf);
 				if (!formatCheck.valid) {
 					logError('Invalid main image format', { error: formatCheck.error });
@@ -808,13 +681,11 @@ export default {
 				const hasMetadata = Object.keys(meta).length > 0;
 				const mainIsJpeg = mainCt && (mainCt.includes('jpeg') || mainCt.includes('jpg'));
 
+				// Only warn if metadata provided for non-JPEG, don't block
+				let metadataWarning: string | null = null;
 				if (hasMetadata && !mainIsJpeg) {
-					return okJson(
-						{
-							error: 'EXIF metadata embedding only supported for JPEG images. Provide a JPEG when metadata is used.',
-						},
-						400
-					);
+					metadataWarning = 'Metadata cannot be embedded in non-JPEG images. Proceeding with watermark/compression only.';
+					logInfo('Metadata skipped for non-JPEG', { format: mainCt });
 				}
 
 				// Store main image to R2
@@ -829,7 +700,7 @@ export default {
 					return okJson({ error: 'Failed to store main image' }, 500);
 				}
 
-				// Get and validate main dimensions
+				// Get main dimensions
 				let mainDims: { w: number; h: number } | null = null;
 				if (mainCt.includes('png')) {
 					mainDims = getPngDimensions(mainBuf);
@@ -844,16 +715,9 @@ export default {
 
 				logInfo('Main image processed', { dims: mainDims });
 
-				// Check if watermark is provided
 				const hasWatermark = (wmFile && wmFile.size > 0) || (wmUrl && wmUrl.trim().length > 0);
 
-				logInfo('Watermark check', {
-					hasWatermark,
-					hasFile: !!(wmFile && wmFile.size > 0),
-					hasUrl: !!(wmUrl && wmUrl.trim().length > 0),
-				});
-
-				// Load image watermark
+				// Load watermark
 				let watermarkKey: string | null = null;
 				let wmBuf: ArrayBuffer | null = null;
 				let wmCt: string | null = null;
@@ -861,11 +725,7 @@ export default {
 
 				if (hasWatermark) {
 					try {
-						logInfo('Processing watermark', {
-							hasFile: !!(wmFile && wmFile.size > 0),
-							hasUrl: !!(wmUrl && wmUrl.trim().length > 0),
-							urlProvided: wmUrl,
-						});
+						logInfo('Processing watermark');
 
 						if (wmFile && wmFile.size > 0) {
 							if (wmFile.size > CONFIG.MAX_FILE_SIZE) {
@@ -873,7 +733,7 @@ export default {
 							}
 							wmBuf = await wmFile.arrayBuffer();
 							wmCt = wmFile.type || null;
-							logInfo('Watermark uploaded', { size: wmBuf.byteLength, claimedType: wmCt });
+							logInfo('Watermark uploaded', { size: wmBuf.byteLength });
 						} else if (wmUrl && wmUrl.trim().length > 0) {
 							const fetched = await fetchResource(wmUrl, 'watermark');
 							wmBuf = fetched.buffer;
@@ -881,44 +741,22 @@ export default {
 						}
 
 						if (wmBuf) {
-							logInfo('Verifying watermark format', {
-								bufferSize: wmBuf.byteLength,
-								claimedContentType: wmCt,
-							});
-
-							// Verify watermark format
 							const wmFormatCheck = verifyImageFormat(wmBuf);
 							if (!wmFormatCheck.valid) {
-								logError('Invalid watermark format', {
-									error: wmFormatCheck.error,
-									claimedType: wmCt,
-									bufferSize: wmBuf.byteLength,
-								});
+								logError('Invalid watermark format', { error: wmFormatCheck.error });
 								return okJson({ error: `Invalid watermark format: ${wmFormatCheck.error}` }, 400);
 							}
 							wmCt = wmFormatCheck.type;
 
-							logInfo('Watermark format verified', { detectedType: wmCt });
-
-							// Get watermark dimensions
 							if (wmCt.includes('png')) {
 								wmDims = getPngDimensions(wmBuf);
 							} else if (wmCt.includes('jpeg') || wmCt.includes('jpg')) {
 								wmDims = getJpegDimensions(wmBuf);
 							}
 
-							if (wmDims) {
-								logInfo('Watermark dimensions extracted', { width: wmDims.w, height: wmDims.h });
-
-								if (!validateDimensions(wmDims)) {
-									logError('Watermark dimensions invalid', {
-										dims: wmDims,
-										maxAllowed: CONFIG.MAX_DIMENSION,
-									});
-									return okJson({ error: 'Watermark dimensions invalid or too large' }, 400);
-								}
-							} else {
-								logInfo('Could not extract watermark dimensions (non-critical)');
+							if (wmDims && !validateDimensions(wmDims)) {
+								logError('Watermark dimensions invalid', { dims: wmDims });
+								return okJson({ error: 'Watermark dimensions invalid or too large' }, 400);
 							}
 
 							const wmHash = await hashBufferHex(wmBuf);
@@ -928,32 +766,20 @@ export default {
 							logInfo('Storing watermark to R2', { key: watermarkKey });
 							await putToR2(env, watermarkKey, wmBuf, wmCt);
 
-							logInfo('Watermark processed successfully', {
-								dims: wmDims,
-								key: watermarkKey,
-								type: wmCt,
-							});
-						} else {
-							logInfo('No watermark file/URL provided');
+							logInfo('Watermark processed successfully', { dims: wmDims, key: watermarkKey });
 						}
 					} catch (err: any) {
-						logError('Watermark processing failed', {
-							error: err.message || String(err),
-							stack: err.stack,
-						});
+						logError('Watermark processing failed', { error: err.message });
 						return okJson({ error: 'Failed to process watermark' }, 400);
 					}
-				} else {
-					logInfo('No watermark selected');
 				}
 
-				// Calculate overlay width (percent or px)
+				// Calculate overlay width
 				let overlayWidthPx = parseSizeToPixels(wmSizeRaw, mainDims?.w);
 				if (!overlayWidthPx && mainDims?.w) {
 					overlayWidthPx = Math.max(1, Math.round(mainDims.w * 0.2));
 				}
 
-				// Clamp to policy - avoid covering entire image
 				if (mainDims?.w && overlayWidthPx) {
 					const maxAllowed = Math.max(1, Math.round(mainDims.w * CONFIG.MAX_WM_RATIO));
 					if (overlayWidthPx >= mainDims.w) {
@@ -963,7 +789,7 @@ export default {
 					}
 				}
 
-				// Opacity normalization (0..1)
+				// Opacity normalization
 				let opacity = parseFloat(wmOpacityRaw);
 				if (Number.isNaN(opacity)) opacity = 0.6;
 				if (opacity > 1) opacity = Math.min(1, opacity / 100);
@@ -976,9 +802,31 @@ export default {
 					headers: { 'User-Agent': USER_AGENT },
 				};
 
-				// Add watermark overlay if provided
+				// Add quality and dimensions
+				const quality = parseInt(qualityRaw, 10);
+				if (!isNaN(quality) && quality >= 1 && quality <= 100) {
+					transformOptions.cf.image.quality = quality;
+					logInfo('Quality set', { quality });
+				}
+
+				const width = parseInt(widthRaw, 10);
+				if (!isNaN(width) && width > 0) {
+					transformOptions.cf.image.width = width;
+					transformOptions.cf.image.fit = 'scale-down';
+					logInfo('Width constraint set', { width });
+				}
+
+				const height = parseInt(heightRaw, 10);
+				if (!isNaN(height) && height > 0) {
+					transformOptions.cf.image.height = height;
+					if (!transformOptions.cf.image.fit) {
+						transformOptions.cf.image.fit = 'scale-down';
+					}
+					logInfo('Height constraint set', { height });
+				}
+
+				// Add watermark overlay
 				if (watermarkKey) {
-					// Image watermark overlay
 					const useOriginalWmUrl = wmUrl && wmUrl.trim().length > 0;
 					const finalWmUrl = useOriginalWmUrl ? wmUrl.trim() : `${requestOrigin}/r2/${encodeURIComponent(watermarkKey)}`;
 
@@ -993,7 +841,6 @@ export default {
 						drawObj.fit = 'contain';
 					}
 
-					// Map gravity to positioning
 					const grav = (wmGravity || 'center').toString().toLowerCase();
 					const margin = Math.max(wmMarginDefault, Math.round((mainDims?.w || 200) * 0.02));
 
@@ -1036,24 +883,17 @@ export default {
 							break;
 						case 'center':
 						default:
-							// Centered - no offsets
 							break;
 					}
 
 					transformOptions.cf.image.draw = [drawObj];
-					logInfo('Image watermark overlay configured', {
-						gravity: grav,
-						width: overlayWidthPx,
-						opacity,
-						watermarkUrl: finalWmUrl,
-						usingOriginalUrl: useOriginalWmUrl,
-					});
+					logInfo('Watermark overlay configured', { gravity: grav, width: overlayWidthPx, opacity });
 				}
 
 				// Call Cloudflare image transform
 				let transformed: Response;
 				try {
-					logInfo('Calling image transform', { url: mainR2Url });
+					logInfo('Calling image transform', { url: mainR2Url, options: transformOptions.cf.image });
 					transformed = await fetch(mainR2Url, transformOptions);
 				} catch (err) {
 					logError('Transform network failure', err);
@@ -1061,10 +901,7 @@ export default {
 				}
 
 				if (!transformed.ok) {
-					logError('Transform returned error', {
-						status: transformed.status,
-						statusText: transformed.statusText,
-					});
+					logError('Transform returned error', { status: transformed.status, statusText: transformed.statusText });
 					return okJson({ error: 'Image transform failed' }, 500);
 				}
 
@@ -1085,11 +922,12 @@ export default {
 					compressionRatio: (mainBuf.byteLength / outBuf.byteLength).toFixed(2),
 				});
 
-				// Embed metadata
+				// Embed metadata only for JPEG outputs
 				try {
-					if ((outCt.includes('jpeg') || outCt.includes('jpg')) && hasMetadata) {
+					if ((outCt.includes('jpeg') || outCt.includes('jpg')) && hasMetadata && mainIsJpeg) {
 						outBuf = insertExifIntoJpeg(outBuf, meta);
 						logInfo('EXIF metadata inserted');
+						metadataWarning = null; // Clear warning if successfully embedded
 					} else if (outCt.includes('png') && Object.keys(meta).length) {
 						outBuf = insertPngTextChunks(outBuf, meta);
 						logInfo('PNG tEXt chunks inserted');
@@ -1104,7 +942,6 @@ export default {
 				// Return final image
 				const headers = new Headers({ 'Content-Type': outCt });
 
-				// Generate friendly filename
 				const timestamp = new Date().toISOString().split('T')[0].replace(/-/g, '');
 				const extension = extFromContentType(outCt);
 				const filename = `protected-${timestamp}-${mainHash.substring(0, 8)}.${extension}`;
@@ -1113,22 +950,23 @@ export default {
 				headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
 				headers.set('X-Content-Type-Options', 'nosniff');
 
-				logInfo('responding with protected image', {
+				if (metadataWarning) {
+					headers.set('X-Metadata-Warning', metadataWarning);
+				}
+
+				logInfo('Responding with protected image', {
 					filename,
 					watermarkApplied: !!watermarkKey,
-					metadataEmbedded: hasMetadata,
+					metadataEmbedded: hasMetadata && mainIsJpeg,
+					warning: metadataWarning,
 				});
 
 				const duration = Date.now() - startTime;
-				logInfo('Request complete', {
-					duration: `${duration}ms`,
-					finalSize: outBuf.byteLength,
-				});
+				logInfo('Request complete', { duration: `${duration}ms`, finalSize: outBuf.byteLength });
 
 				return new Response(outBuf, { status: 200, headers });
 			}
 
-			// Health check
 			if (request.method === 'GET') {
 				return new Response(
 					JSON.stringify({
@@ -1154,7 +992,6 @@ export default {
 			const duration = Date.now() - startTime;
 			logError('Unhandled error', { error, duration: `${duration}ms` });
 
-			// Always return JSON error with requestId for traceability
 			return okJson(
 				{
 					error: 'Internal error',

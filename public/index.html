@@ -6,21 +6,35 @@
 		<title>Image Protector</title>
 		<style>
 			:root {
-				--bg: #f5f7fb;
+				--bg: #fafbfc;
 				--card: #ffffff;
-				--muted: #6b7280;
-				--accent: #0b66ff;
-				--glass: rgba(11, 102, 255, 0.06);
-				--radius: 12px;
-				font-family: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
-				color: #0f172a;
-				font-size: 15px;
+				--border: #e1e4e8;
+				--text: #24292e;
+				--text-muted: #586069;
+				--accent: #0366d6;
+				--accent-hover: #0256c7;
+				--danger: #d73a49;
+				--warning: #f9c513;
+				--success: #28a745;
+				--input-bg: #fafbfc;
+				--shadow-sm: 0 0.125rem 0.25rem rgba(27, 31, 35, 0.04);
+				--shadow-md: 0 0.5rem 1rem rgba(27, 31, 35, 0.08);
+				--radius: 0.375rem;
+				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+				color: var(--text);
+				font-size: 0.875rem;
+				line-height: 1.5;
+			}
+			*,
+			::before,
+			::after {
+				box-sizing: border-box;
 			}
 			html,
 			body {
 				height: 100%;
 				margin: 0;
-				background: linear-gradient(180deg, var(--bg), #eef2fb 60%);
+				background: var(--bg);
 				-webkit-font-smoothing: antialiased;
 			}
 			.page {
@@ -28,293 +42,358 @@
 				display: flex;
 				flex-direction: column;
 				align-items: center;
-				justify-content: center;
-				padding: 28px;
-				box-sizing: border-box;
+				padding: 2rem 1rem;
 			}
-
 			.card {
 				width: 100%;
-				max-width: 980px;
+				max-width: 60rem;
 				background: var(--card);
 				border-radius: var(--radius);
-				padding: 22px;
-				box-shadow: 0 8px 30px rgba(13, 24, 40, 0.07);
-				border: 1px solid rgba(15, 23, 42, 0.03);
-				box-sizing: border-box;
+				padding: 1.5rem;
+				box-shadow: var(--shadow-md);
+				border: 0.0625rem solid var(--border);
 			}
-
 			header {
 				display: flex;
-				gap: 16px;
+				gap: 1rem;
 				align-items: center;
-				margin-bottom: 14px;
+				margin-bottom: 1.5rem;
+				padding-bottom: 1.5rem;
+				border-bottom: 0.0625rem solid var(--border);
 			}
 			.logo {
-				width: 48px;
-				height: 48px;
-				border-radius: 10px;
-				background: linear-gradient(135deg, var(--accent), #5fb0ff);
+				width: 3rem;
+				height: 3rem;
+				border-radius: var(--radius);
+				background: var(--accent);
 				display: grid;
 				place-items: center;
 				color: white;
 				font-weight: 700;
-				box-shadow: 0 6px 18px rgba(11, 102, 255, 0.12);
+				font-size: 1.25rem;
+				flex-shrink: 0;
 			}
 			h1 {
-				font-size: 18px;
+				font-size: 1.5rem;
 				margin: 0;
+				font-weight: 600;
 			}
-			p.lead {
-				margin: 0;
-				color: var(--muted);
-				font-size: 13px;
+			.lead {
+				margin: 0.25rem 0 0;
+				color: var(--text-muted);
+				font-size: 0.875rem;
 			}
-
 			form {
-				margin-top: 14px;
+				display: flex;
+				flex-direction: column;
+				gap: 1.5rem;
 			}
 			fieldset {
-				border: 1px solid #7d8289;
-				border-radius: 10px;
-				padding: 14px;
-				margin-bottom: 12px;
+				border: 0.0625rem solid var(--border);
+				border-radius: var(--radius);
+				padding: 1rem;
+				margin: 0;
 			}
 			legend {
-				font-size: 12px;
-				color: var(--muted);
-				padding: 0 6px;
+				font-size: 0.875rem;
+				font-weight: 600;
+				color: var(--text);
+				padding: 0 0.5rem;
+			}
+			.grid {
+				display: grid;
+				gap: 1rem;
 			}
 			.grid-2 {
-				display: grid;
-				grid-template-columns: 1fr 1fr;
-				gap: 12px;
+				grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+			}
+			.grid-3 {
+				grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
 			}
 			label {
 				display: block;
 				font-weight: 600;
-				font-size: 13px;
-				margin-bottom: 8px;
-				color: #0f172a;
+				font-size: 0.8125rem;
+				margin-bottom: 0.5rem;
+				color: var(--text);
 			}
 			input[type='file'] {
 				display: block;
+				width: 100%;
+				font-size: 0.875rem;
 			}
 			input[type='url'],
 			input[type='text'],
+			input[type='number'],
 			textarea,
 			select {
 				width: 100%;
-				padding: 10px;
-				border-radius: 8px;
-				border: 1px solid #e6eefb;
-				background: #fbfdff;
-				box-sizing: border-box;
-				font-size: 14px;
+				padding: 0.5rem 0.75rem;
+				border-radius: var(--radius);
+				border: 0.0625rem solid var(--border);
+				background: var(--input-bg);
+				font-size: 0.875rem;
+				transition: border-color 0.15s ease;
+			}
+			input:focus,
+			textarea:focus,
+			select:focus {
+				outline: none;
+				border-color: var(--accent);
+				box-shadow: 0 0 0 0.1875rem rgba(3, 102, 214, 0.1);
 			}
 			textarea {
-				min-height: 88px;
+				min-height: 5.5rem;
 				resize: vertical;
+				font-family: ui-monospace, monospace;
 			}
-
-			.row {
-				display: flex;
-				gap: 8px;
-				align-items: center;
-			}
-			.controls {
-				display: flex;
-				gap: 12px;
-				align-items: center;
+			.muted {
+				color: var(--text-muted);
+				font-size: 0.8125rem;
+				margin-top: 0.25rem;
 			}
 			.btn {
 				display: inline-flex;
 				align-items: center;
-				gap: 8px;
-				padding: 10px 14px;
-				border-radius: 10px;
-				border: 0;
-				font-weight: 700;
-				color: #fff;
-				background: var(--accent);
-				cursor: pointer;
-				box-shadow: 0 6px 18px rgba(11, 102, 255, 0.12);
-			}
-			.btn.ghost {
-				background: transparent;
-				color: var(--accent);
-				border: 1px solid rgba(11, 102, 255, 0.12);
+				justify-content: center;
+				gap: 0.5rem;
+				padding: 0.5rem 1rem;
+				border-radius: var(--radius);
+				border: 0.0625rem solid transparent;
 				font-weight: 600;
+				font-size: 0.875rem;
+				cursor: pointer;
+				transition: all 0.15s ease;
+				white-space: nowrap;
 			}
-			.btn[disabled] {
+			.btn-primary {
+				background: var(--accent);
+				color: white;
+				border-color: var(--accent);
+			}
+			.btn-primary:hover:not(:disabled) {
+				background: var(--accent-hover);
+			}
+			.btn-secondary {
+				background: transparent;
+				color: var(--text);
+				border-color: var(--border);
+			}
+			.btn-secondary:hover:not(:disabled) {
+				background: var(--input-bg);
+			}
+			.btn:disabled {
 				opacity: 0.5;
 				cursor: not-allowed;
-				box-shadow: none;
 			}
-
-			.muted {
-				color: var(--muted);
-				font-size: 13px;
-			}
-			.small {
-				font-size: 13px;
-				color: var(--muted);
-			}
-
-			.meta-area {
-				display: grid;
-				grid-template-columns: 1fr 1fr;
-				gap: 12px;
+			.controls {
+				display: flex;
+				gap: 0.75rem;
+				align-items: center;
+				justify-content: flex-end;
+				flex-wrap: wrap;
 			}
 			.meta-rows {
 				display: flex;
 				flex-direction: column;
-				gap: 8px;
+				gap: 0.5rem;
 			}
 			.meta-row {
 				display: flex;
-				gap: 8px;
+				gap: 0.5rem;
 			}
 			.meta-row input {
 				flex: 1;
-				padding: 8px;
-				border-radius: 8px;
-				border: 1px solid #eef4ff;
-				background: #fff;
 			}
-
-			.previewWrap {
-				display: flex;
-				gap: 12px;
-				flex-wrap: wrap;
-				margin-top: 8px;
+			.meta-row button {
+				padding: 0.5rem;
+				border: 0.0625rem solid var(--border);
+				background: white;
+				border-radius: var(--radius);
+				cursor: pointer;
+				color: var(--danger);
+			}
+			.preview-wrap {
+				display: grid;
+				grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
+				gap: 0.75rem;
+				margin-top: 0.75rem;
 			}
 			.preview {
-				width: 120px;
-				height: 120px;
-				border-radius: 10px;
-				border: 1px solid #eef4ff;
-				background: linear-gradient(180deg, #fbfdff, #f7fbff);
+				aspect-ratio: 1;
+				border-radius: var(--radius);
+				border: 0.0625rem solid var(--border);
+				background: var(--input-bg);
 				display: flex;
 				align-items: center;
 				justify-content: center;
 				overflow: hidden;
-				box-shadow: inset 0 -4px 18px rgba(11, 102, 255, 0.02);
 			}
 			.preview img {
 				max-width: 100%;
 				max-height: 100%;
 				display: block;
+				object-fit: contain;
 			}
-
-			#result {
-				margin-top: 12px;
+			.result {
+				margin-top: 1.5rem;
+			}
+			.result-content {
 				display: flex;
-				gap: 12px;
-				align-items: center;
-				flex-wrap: wrap;
-			}
-
-			footer {
-				margin-top: 14px;
-				display: flex;
-				justify-content: space-between;
-				gap: 12px;
-				align-items: center;
-			}
-			code.badge {
-				background: #f1f5f9;
-				padding: 6px 8px;
-				border-radius: 8px;
-				font-size: 12px;
-				color: var(--muted);
-				border: 1px solid #eef2ff;
-			}
-
-			.disclaimer {
-				margin-top: 20px;
-				padding: 12px;
-				background: #fef3c7;
-				border: 1px solid #fde68a;
+				flex-direction: column;
+				gap: 1rem;
+				padding: 1rem;
+				border: 0.0625rem solid var(--border);
 				border-radius: var(--radius);
-				font-size: 12px;
-				color: #92400e;
+				background: var(--input-bg);
+			}
+			.result-preview img {
+				max-width: 100%;
+				height: auto;
+				max-height: 18.75rem;
+				border-radius: var(--radius);
+				border: 0.0625rem solid var(--border);
+			}
+			.result-info {
+				font-size: 0.8125rem;
+				color: var(--text-muted);
+			}
+			.alert {
+				padding: 0.75rem 1rem;
+				border-radius: var(--radius);
+				border: 0.0625rem solid;
+				margin-top: 1rem;
+				font-size: 0.8125rem;
+			}
+			.alert-warning {
+				background: #fffbdd;
+				border-color: #e6db74;
+				color: #6b5d00;
+			}
+			.alert-info {
+				background: #dbedff;
+				border-color: #0366d6;
+				color: #044289;
+			}
+			.disclaimer {
+				margin-top: 1.5rem;
+				padding: 1rem;
+				background: #fffbdd;
+				border: 0.0625rem solid #e6db74;
+				border-radius: var(--radius);
+				font-size: 0.8125rem;
+				color: #6b5d00;
 				text-align: center;
-				line-height: 1.5;
 			}
 			.disclaimer a {
-				color: #b45309;
+				color: #6b5d00;
 				font-weight: 600;
-				text-decoration: none;
 			}
-			.disclaimer a:hover {
-				text-decoration: underline;
+			footer {
+				margin-top: 1.5rem;
+				padding-top: 1rem;
+				border-top: 0.0625rem solid var(--border);
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				gap: 1rem;
+				flex-wrap: wrap;
+				font-size: 0.8125rem;
+				color: var(--text-muted);
 			}
-
-			/* responsive */
-			@media (max-width: 720px) {
-				.grid-2,
-				.meta-area {
-					grid-template-columns: 1fr;
+			code {
+				background: #f6f8fa;
+				padding: 0.125rem 0.375rem;
+				border-radius: 0.1875rem;
+				font-size: 0.8125rem;
+				font-family: ui-monospace, monospace;
+			}
+			@media (max-width: 48rem) {
+				.card {
+					padding: 1rem;
 				}
 				header {
-					gap: 10px;
+					flex-direction: column;
+					align-items: flex-start;
 				}
-				.logo {
-					width: 44px;
-					height: 44px;
+				.grid-2,
+				.grid-3 {
+					grid-template-columns: 1fr;
+				}
+				.controls {
+					justify-content: stretch;
+				}
+				.controls .btn {
+					flex: 1;
 				}
 			}
 		</style>
 	</head>
 	<body>
 		<div class="page">
-			<section class="card" aria-labelledby="title">
+			<section class="card">
 				<header>
 					<div class="logo">IP</div>
 					<div>
-						<h1 id="title">Image Protector</h1>
-						<p class="lead">Embed EXIF metadata into JPEGs and apply image watermarks before publishing.</p>
+						<h1>Image Protector</h1>
+						<p class="lead">Embed EXIF metadata into JPEGs and apply image watermarks with optional compression</p>
 					</div>
 				</header>
 
 				<form id="uploadForm" autocomplete="off" novalidate>
 					<fieldset>
-						<legend>Main image</legend>
-						<div class="grid-2">
+						<legend>Main Image</legend>
+						<div class="grid grid-2">
 							<div>
-								<label for="mainFile">Main image – file (preferred)</label>
-								<input id="mainFile" name="main_file" type="file" accept="image/jpeg,image/jpg" />
-								<div class="small muted">
-									Only JPEG is allowed when embedding EXIF metadata. Otherwise watermarking works with other formats.
-								</div>
+								<label for="mainFile">Upload File</label>
+								<input id="mainFile" name="main_file" type="file" accept="image/*" />
+								<div class="muted">JPEG required for EXIF metadata. PNG/WebP supported for watermarking only.</div>
 							</div>
 							<div>
-								<label for="mainUrl">Main image – public URL</label>
+								<label for="mainUrl">Public URL</label>
 								<input id="mainUrl" name="main_url" type="url" placeholder="https://example.com/image.jpg" />
 							</div>
 						</div>
 					</fieldset>
 
 					<fieldset>
-						<legend>Watermark (optional)</legend>
-
-						<div class="grid-2">
+						<legend>Main Image Quality</legend>
+						<div class="grid grid-3">
 							<div>
-								<label for="wmFile">Watermark – file</label>
-								<input id="wmFile" name="watermark_file" type="file" accept="image/png,image/webp,image/jpeg" />
-								<div class="small muted">PNG or WebP with transparency recommended.</div>
+								<label for="quality">Quality (1-100)</label>
+								<input id="quality" name="quality" type="number" min="1" max="100" value="100" />
+								<div class="muted">Lower = smaller file</div>
 							</div>
 							<div>
-								<label for="wmUrl">Watermark – public URL</label>
+								<label for="width">Max Width (px)</label>
+								<input id="width" name="width" type="number" min="0" placeholder="Original" />
+								<div class="muted">Leave empty for original</div>
+							</div>
+							<div>
+								<label for="height">Max Height (px)</label>
+								<input id="height" name="height" type="number" min="0" placeholder="Original" />
+								<div class="muted">Leave empty for original</div>
+							</div>
+						</div>
+					</fieldset>
+
+					<fieldset>
+						<legend>Watermark (Optional)</legend>
+						<div class="grid grid-2">
+							<div>
+								<label for="wmFile">Upload File</label>
+								<input id="wmFile" name="watermark_file" type="file" accept="image/*" />
+								<div class="muted">PNG/WebP with transparency recommended</div>
+							</div>
+							<div>
+								<label for="wmUrl">Public URL</label>
 								<input id="wmUrl" name="watermark_url" type="url" placeholder="https://example.com/watermark.png" />
-								<div class="small muted">For text: pre-generate as PNG using Canva or Photoshop.</div>
 							</div>
 						</div>
 
-						<div style="display: flex; gap: 12px; margin-top: 12px; align-items: flex-end; flex-wrap: wrap">
-							<div style="flex: 1; min-width: 150px">
-								<label for="wmSize">Watermark size</label>
+						<div class="grid grid-3">
+							<div>
+								<label for="wmSize">Size</label>
 								<select id="wmSize">
 									<option value="10p">10% of image</option>
 									<option value="15p">15% of image</option>
@@ -322,7 +401,7 @@
 									<option value="25p">25% of image</option>
 								</select>
 							</div>
-							<div style="flex: 1; min-width: 120px">
+							<div>
 								<label for="wmOpacity">Opacity</label>
 								<select id="wmOpacity">
 									<option value="20">20% (subtle)</option>
@@ -332,84 +411,69 @@
 									<option value="100">100% (solid)</option>
 								</select>
 							</div>
-							<div style="flex: 1; min-width: 140px">
+							<div>
 								<label for="wmGravity">Position</label>
 								<select id="wmGravity">
 									<option value="center" selected>Center</option>
 									<option value="northwest">Top-left</option>
 									<option value="northeast">Top-right</option>
 									<option value="southwest">Bottom-left</option>
-									<option value="southeast">Bottom-right</option>
-									<option value="north">Top center</option>
-									<option value="south">Bottom center</option>
-									<option value="west">Left center</option>
-									<option value="east">Right center</option>
+									<option value="southeast" selected>Bottom-right</option>
 								</select>
 							</div>
 						</div>
 					</fieldset>
 
 					<fieldset>
-						<legend>Metadata to embed (JPEG only)</legend>
-						<div class="meta-area">
+						<legend>Metadata <strong>(JPEG Only)</strong></legend>
+						<div class="grid grid-2">
 							<div>
-								<label>Common fields</label>
-								<input id="metaAuthor" type="text" placeholder="Author / Artist" />
-								<div style="height: 8px"></div>
-								<input id="metaDesc" type="text" placeholder="Description / ImageDescription" />
-								<div style="height: 8px"></div>
+								<label>Common Fields</label>
+								<input id="metaAuthor" type="text" placeholder="Author / Artist" style="margin-bottom: 0.5rem" />
+								<input id="metaDesc" type="text" placeholder="Description" style="margin-bottom: 0.5rem" />
 								<input id="metaSource" type="text" placeholder="Source / Website" />
 							</div>
-
 							<div>
-								<label>Custom key/value pairs</label>
+								<label>Custom Key/Value Pairs</label>
 								<div class="meta-rows" id="metaRows"></div>
-								<div style="margin-top: 10px">
-									<button type="button" id="addMeta" class="btn ghost">+ Add pair</button>
-								</div>
+								<button type="button" id="addMeta" class="btn btn-secondary" style="margin-top: 0.5rem">+ Add Pair</button>
 							</div>
 						</div>
-
-						<div style="margin-top: 12px">
-							<label for="metadataJson">Raw metadata JSON (optional – overrides fields)</label>
-							<textarea id="metadataJson" name="metadata_json" placeholder='{"Author":"Alice","Source":"example.com"}'></textarea>
+						<div style="margin-top: 1rem">
+							<label for="metadataJson">Raw JSON (Optional)</label>
+							<textarea id="metadataJson" placeholder='{"Author":"Alice","Source":"example.com"}'></textarea>
 						</div>
 					</fieldset>
 
-					<div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap">
-						<div class="small muted">Uploads are POSTed to <code class="badge">/process</code>. EXIF only applies to JPEG outputs.</div>
-						<div class="controls">
-							<button id="submitBtn" class="btn" type="submit">
-								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
-									<path
-										d="M12 2v20M5 9l7-7 7 7"
-										stroke="currentColor"
-										stroke-width="1.6"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-									/></svg
-								>Protect & Download
-							</button>
-							<button id="clearBtn" type="button" class="btn ghost">Clear</button>
-						</div>
+					<section id="previewArea">
+						<label>Previews</label>
+						<div class="preview-wrap" id="previewWrap"></div>
+					</section>
+
+					<div class="controls">
+						<button id="clearBtn" type="button" class="btn btn-secondary">Clear</button>
+						<button id="submitBtn" class="btn btn-primary" type="submit">
+							<svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+								<path d="M12 2v20M5 9l7-7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+							</svg>
+							Process & Download
+						</button>
 					</div>
 				</form>
+
 				<div id="result"></div>
-				<section id="previewArea" style="margin-top: 16px">
-					<label class="small">Previews</label>
-					<div class="previewWrap" id="previewWrap" aria-live="polite"></div>
-				</section>
-				<footer style="margin-top: 14px">
-					<span class="small muted">Deterministic R2 keys. No third-party libraries.</span>
-					<span class="small muted">Watermark will be clamped to avoid covering the full image.</span>
+
+				<footer>
+					<span>Powered by Cloudflare Workers & R2</span>
+					<span>SHA-256 deterministic keys</span>
 				</footer>
 
 				<div class="disclaimer">
-					<strong>Disclaimer:</strong> This is a private project for educational purposes only. For more information, visit the
-					<a href="https://github.com/DavidJKTofan/cf-workers-exif-images" target="_blank" rel="noopener noreferrer external">GitHub repository</a>.
+					<strong>Disclaimer:</strong> This is a private project for educational purposes only. For more information, visit the <a href="https://github.com/DavidJKTofan/cf-workers-exif-images" target="_blank" rel="noopener">GitHub repository</a>.
 				</div>
 			</section>
 		</div>
+
 		<script>
 			(function () {
 				const form = document.getElementById('uploadForm');
@@ -426,10 +490,10 @@
 				const previewWrap = document.getElementById('previewWrap');
 				const submitBtn = document.getElementById('submitBtn');
 				const result = document.getElementById('result');
-				const wmSize = document.getElementById('wmSize');
-				const wmOpacity = document.getElementById('wmOpacity');
-				const wmGravity = document.getElementById('wmGravity');
 				const clearBtn = document.getElementById('clearBtn');
+				const quality = document.getElementById('quality');
+				const width = document.getElementById('width');
+				const height = document.getElementById('height');
 
 				function createMetaRow(key = '', value = '') {
 					const wrap = document.createElement('div');
@@ -444,9 +508,8 @@
 					v.value = value;
 					const rm = document.createElement('button');
 					rm.type = 'button';
-					rm.textContent = '✕';
+					rm.textContent = '×';
 					rm.title = 'Remove';
-					rm.style.padding = '6px 8px';
 					rm.addEventListener('click', () => wrap.remove());
 					wrap.appendChild(k);
 					wrap.appendChild(v);
@@ -455,8 +518,7 @@
 					return wrap;
 				}
 
-				if (addMeta) addMeta.addEventListener('click', () => createMetaRow());
-
+				addMeta.addEventListener('click', () => createMetaRow());
 				if (!metaRows.querySelector('.meta-row')) createMetaRow('Copyright', '');
 
 				function clearPreviews() {
@@ -468,37 +530,37 @@
 					if (src instanceof File) {
 						const reader = new FileReader();
 						reader.onload = () => {
-							if (src.type && src.type.startsWith('image')) {
+							if (src.type?.startsWith('image')) {
 								const img = document.createElement('img');
 								img.src = reader.result;
 								box.appendChild(img);
-							} else {
-								box.textContent = 'file';
-							}
+							} else box.textContent = 'file';
 						};
 						reader.readAsDataURL(src);
-					} else if (typeof src === 'string' && src.trim() !== '') {
+					} else if (typeof src === 'string' && src.trim()) {
 						const img = document.createElement('img');
 						img.src = src;
-						img.onerror = () => (box.textContent = 'preview failed');
+						img.onerror = () => (box.textContent = 'error');
 						box.appendChild(img);
 					} else box.textContent = label || '';
 					previewWrap.appendChild(box);
 				}
+
 				function refreshPreviews() {
 					clearPreviews();
-					if (mainFile.files && mainFile.files[0]) addPreview(mainFile.files[0], 'main');
+					if (mainFile.files?.[0]) addPreview(mainFile.files[0], 'main');
 					else if (mainUrl.value) addPreview(mainUrl.value, 'main');
-					if (wmFile.files && wmFile.files[0]) addPreview(wmFile.files[0], 'wm');
+					if (wmFile.files?.[0]) addPreview(wmFile.files[0], 'wm');
 					else if (wmUrl.value) addPreview(wmUrl.value, 'wm');
 				}
+
 				mainFile.addEventListener('change', refreshPreviews);
 				mainUrl.addEventListener('input', refreshPreviews);
 				wmFile.addEventListener('change', refreshPreviews);
 				wmUrl.addEventListener('input', refreshPreviews);
 
 				function collectMetadata() {
-					const raw = metadataJson.value && metadataJson.value.trim();
+					const raw = metadataJson.value?.trim();
 					if (raw) {
 						try {
 							const parsed = JSON.parse(raw);
@@ -517,10 +579,6 @@
 					return out;
 				}
 
-				function setResultText(txt) {
-					result.textContent = txt;
-				}
-
 				clearBtn.addEventListener('click', () => {
 					form.reset();
 					metadataJson.value = '';
@@ -531,106 +589,101 @@
 				});
 
 				function isMainLikelyJpeg() {
-					if (mainFile.files && mainFile.files[0]) {
+					if (mainFile.files?.[0]) {
 						const t = mainFile.files[0].type || '';
 						return /jpeg|jpg/i.test(t);
 					}
-					const u = mainUrl.value && mainUrl.value.trim();
-					if (!u) return false;
-					return /\.(jpe?g)(\?.*)?$/i.test(u);
-				}
-
-				async function postProcessResponse(res) {
-					if (!res.ok) {
-						let err;
-						try {
-							err = await res.json();
-						} catch (e) {
-							err = { error: res.statusText };
-						}
-						setResultText('Error: ' + (err?.error || JSON.stringify(err)));
-						return;
-					}
-					const blob = await res.blob();
-					const url = URL.createObjectURL(blob);
-
-					// Create download link
-					const a = document.createElement('a');
-					a.href = url;
-					const disp = res.headers.get('content-disposition') || '';
-					let fname = 'protected-image.jpg';
-					const m = disp.match(/filename\*=UTF-8''([^;\n]+)/i) || disp.match(/filename=\"?([^\";\n]+)\"?/i);
-					if (m && m[1]) fname = decodeURIComponent(m[1].replace(/\s/g, '_'));
-					a.download = fname;
-					a.textContent = '✓ Download Protected Image';
-					a.className = 'btn';
-
-					// Create preview
-					const preview = document.createElement('div');
-					preview.style.cssText = 'display:flex;flex-direction:column;gap:8px;';
-					const img = document.createElement('img');
-					img.src = url;
-					img.style.cssText = 'max-width:400px;max-height:300px;border-radius:8px;border:1px solid #e6eefb;';
-					const info = document.createElement('div');
-					info.className = 'small muted';
-					info.textContent = `File: ${fname} • Size: ${(blob.size / 1024).toFixed(1)} KB`;
-
-					preview.appendChild(img);
-					preview.appendChild(a);
-					preview.appendChild(info);
-
-					result.innerHTML = '';
-					result.appendChild(preview);
+					const u = mainUrl.value?.trim();
+					return u ? /\.(jpe?g)(\?.*)?$/i.test(u) : false;
 				}
 
 				form.addEventListener('submit', async (ev) => {
 					ev.preventDefault();
 					result.innerHTML = '';
-					setResultText('Processing…');
 					submitBtn.disabled = true;
 
 					const meta = collectMetadata();
 					const hasMetadata = Object.keys(meta).length > 0;
-					const hasMainFile = mainFile.files && mainFile.files[0];
-					const hasMainUrl = mainUrl.value && mainUrl.value.trim();
+					const hasMainFile = mainFile.files?.[0];
+					const hasMainUrl = mainUrl.value?.trim();
 
 					if (!hasMainFile && !hasMainUrl) {
-						setResultText('Provide a main image file or URL before submitting.');
+						result.innerHTML = '<div class="alert alert-warning">Provide a main image file or URL.</div>';
 						submitBtn.disabled = false;
 						return;
 					}
 
+					// Show warning if metadata provided for non-JPEG
 					if (hasMetadata && !isMainLikelyJpeg()) {
-						setResultText('When embedding metadata, the main image must be a JPEG. Provide a JPEG file or a .jpg/.jpeg URL.');
-						submitBtn.disabled = false;
-						return;
+						result.innerHTML =
+							'<div class="alert alert-warning">Metadata will not be embedded. Main image must be JPEG for EXIF support. Continuing with watermark only.</div>';
 					}
+
+					result.innerHTML += '<div class="alert alert-info">Processing...</div>';
 
 					const fd = new FormData();
 					if (hasMainFile) fd.append('main_file', mainFile.files[0]);
 					else if (hasMainUrl) fd.append('main_url', mainUrl.value.trim());
 
-					// Image watermark only
-					if (wmFile.files && wmFile.files[0]) fd.append('watermark_file', wmFile.files[0]);
-					else if (wmUrl.value.trim()) fd.append('watermark_url', wmUrl.value.trim());
+					if (wmFile.files?.[0]) fd.append('watermark_file', wmFile.files[0]);
+					else if (wmUrl.value?.trim()) fd.append('watermark_url', wmUrl.value.trim());
 
-					fd.append('wm_size', wmSize.value);
-					fd.append('wm_opacity', wmOpacity.value);
-					fd.append('wm_gravity', wmGravity.value);
+					fd.append('wm_size', document.getElementById('wmSize').value);
+					fd.append('wm_opacity', document.getElementById('wmOpacity').value);
+					fd.append('wm_gravity', document.getElementById('wmGravity').value);
 					fd.append('metadata_json', JSON.stringify(meta));
+
+					// Add quality and dimensions
+					const q = parseInt(quality.value, 10);
+					if (!isNaN(q) && q >= 1 && q <= 100) fd.append('quality', q.toString());
+					const w = parseInt(width.value, 10);
+					if (!isNaN(w) && w > 0) fd.append('width', w.toString());
+					const h = parseInt(height.value, 10);
+					if (!isNaN(h) && h > 0) fd.append('height', h.toString());
 
 					try {
 						const res = await fetch('/process', { method: 'POST', body: fd });
-						await postProcessResponse(res);
+						if (!res.ok) {
+							let err;
+							try {
+								err = await res.json();
+							} catch (e) {
+								err = { error: res.statusText };
+							}
+							result.innerHTML = '<div class="alert alert-warning">Error: ' + (err?.error || JSON.stringify(err)) + '</div>';
+							return;
+						}
+						const blob = await res.blob();
+						const url = URL.createObjectURL(blob);
+						const disp = res.headers.get('content-disposition') || '';
+						let fname = 'protected-image.jpg';
+						const m = disp.match(/filename\*=UTF-8''([^;\n]+)/i) || disp.match(/filename=\"?([^\";\n]+)\"?/i);
+						if (m?.[1]) fname = decodeURIComponent(m[1].replace(/\s/g, '_'));
+
+						const preview = document.createElement('div');
+						preview.className = 'result-content';
+						const img = document.createElement('img');
+						img.src = url;
+						img.className = 'result-preview';
+						const a = document.createElement('a');
+						a.href = url;
+						a.download = fname;
+						a.textContent = 'Download Protected Image';
+						a.className = 'btn btn-primary';
+						const info = document.createElement('div');
+						info.className = 'result-info';
+						info.textContent = `${fname} • ${(blob.size / 1024).toFixed(1)} KB`;
+
+						preview.appendChild(img);
+						preview.appendChild(a);
+						preview.appendChild(info);
+						result.innerHTML = '';
+						result.appendChild(preview);
 					} catch (err) {
-						setResultText('Network or server error');
+						result.innerHTML = '<div class="alert alert-warning">Network error</div>';
 					} finally {
 						submitBtn.disabled = false;
 					}
-				});
-
-				metadataJson.addEventListener('keydown', (e) => {
-					if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submitBtn.click();
 				});
 
 				refreshPreviews();
